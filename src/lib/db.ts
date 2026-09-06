@@ -1,0 +1,94 @@
+import type { Channel } from './types';
+
+const DB_NAME = 'xchan';
+const DB_VERSION = 1;
+
+type EndpointRecord = {
+	keyPair: CryptoKeyPair;
+	name: string;
+};
+
+function openDb(): Promise<IDBDatabase> {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.open(DB_NAME, DB_VERSION);
+		req.onupgradeneeded = () => {
+			const db = req.result;
+			if (!db.objectStoreNames.contains('meta')) {
+				db.createObjectStore('meta');
+			}
+			if (!db.objectStoreNames.contains('channels')) {
+				db.createObjectStore('channels');
+			}
+		};
+		req.onsuccess = () => resolve(req.result);
+		req.onerror = () => reject(req.error);
+	});
+}
+
+function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
+	return new Promise((resolve, reject) => {
+		req.onsuccess = () => resolve(req.result);
+		req.onerror = () => reject(req.error);
+	});
+}
+
+export async function loadEndpointRecord(): Promise<EndpointRecord | undefined> {
+	const db = await openDb();
+	try {
+		return await idbRequest(
+			db.transaction('meta').objectStore('meta').get('endpoint') as IDBRequest<
+				EndpointRecord | undefined
+			>
+		);
+	} finally {
+		db.close();
+	}
+}
+
+export async function saveEndpointRecord(record: EndpointRecord): Promise<void> {
+	const db = await openDb();
+	try {
+		await idbRequest(
+			db.transaction('meta', 'readwrite').objectStore('meta').put(record, 'endpoint')
+		);
+	} finally {
+		db.close();
+	}
+}
+
+export async function listChannels(): Promise<Channel[]> {
+	const db = await openDb();
+	try {
+		const rows = await idbRequest(
+			db.transaction('channels').objectStore('channels').getAll() as IDBRequest<Channel[]>
+		);
+		return rows ?? [];
+	} finally {
+		db.close();
+	}
+}
+
+export async function putChannel(channel: Channel): Promise<void> {
+	const db = await openDb();
+	try {
+		await idbRequest(
+			db
+				.transaction('channels', 'readwrite')
+				.objectStore('channels')
+				.put(channel, channel.peerPublicKey)
+		);
+	} finally {
+		db.close();
+	}
+}
+
+export async function deleteChannel(peerPublicKey: string): Promise<void> {
+	const db = await openDb();
+	try {
+		await idbRequest(
+			db.transaction('channels', 'readwrite').objectStore('channels').delete(peerPublicKey)
+		);
+	} finally {
+		db.close();
+	}
+}
