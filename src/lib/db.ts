@@ -92,3 +92,19 @@ export async function deleteChannel(peerPublicKey: string): Promise<void> {
 		db.close();
 	}
 }
+
+/** Drops the local identity and every stored channel. */
+export function deleteDatabase(): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.deleteDatabase(DB_NAME);
+		const timer = setTimeout(() => resolve(), 2000);
+		req.onsuccess = () => {
+			clearTimeout(timer);
+			resolve();
+		};
+		req.onerror = () => {
+			clearTimeout(timer);
+			reject(req.error ?? new Error('Could not reset this device'));
+		};
+	});
+}

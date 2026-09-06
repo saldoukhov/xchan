@@ -1,6 +1,6 @@
 import { bytesToBase64 } from './bytes';
 import { fingerprintFromBytes } from './fingerprint';
-import { loadEndpointRecord, saveEndpointRecord } from '../db';
+import { deleteDatabase, loadEndpointRecord, saveEndpointRecord } from '../db';
 import type { Endpoint } from '../types';
 
 async function generateKeyPair(): Promise<CryptoKeyPair> {
@@ -34,4 +34,9 @@ export async function saveEndpointName(endpoint: Endpoint, name: string): Promis
 		name
 	});
 	return { ...endpoint, name };
+}
+
+export async function resetAndCreateEndpoint(): Promise<Endpoint> {
+	await deleteDatabase();
+	return loadOrCreateEndpoint();
 }
