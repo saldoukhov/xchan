@@ -2,6 +2,8 @@
 
 Web app for pairing two devices and sending an ephemeral secret (for example a password from a computer you already have to a machine you are setting up).
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/saldoukhov/xchan)
+
 Each browser creates a non-exportable P-256 key pair. Pairing exchanges public keys through the server. Messages are ECIES-encrypted to the other device’s public key. The server is a relay only: it does not store keys, channels, or messages.
 
 ## How it works
@@ -39,11 +41,14 @@ npm start
 
 No environment variables are required. Use one replica.
 
-### From GitHub
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/saldoukhov/xchan)
 
-1. Push this repo to GitHub.
-2. In Railway: **New Project → Deploy from GitHub repo**.
-3. After the deploy succeeds, open the service **Settings → Networking → Generate Domain**.
+The button deploys this GitHub repo on Railway. The repository must be public for one-click deploy. After the deploy succeeds, open the service **Settings → Networking → Generate Domain** if Railway did not attach one.
+
+### From GitHub (manual)
+
+1. In Railway: **New Project → Deploy from GitHub repo**.
+2. After the deploy succeeds, open the service **Settings → Networking → Generate Domain**.
 
 Build command: `npm run build`. Start command: `npm start` (or `node build`).
 
@@ -54,11 +59,7 @@ ADDRESS_HEADER=X-Forwarded-For
 XFF_DEPTH=1
 ```
 
-The included `Dockerfile` sets those for you.
-
-### Dockerfile
-
-Railway will use the `Dockerfile` if present. It builds with `npm ci` / `npm run build` and starts with `npm start`.
+The included `Dockerfile` sets those for you. Railway uses it when present (`npm ci` / `npm run build`, then `npm start`).
 
 ### Railway CLI
 
