@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import {
+		applyReadyExchange,
+		channelExchangeChanged,
 		channelLabel,
 		channelPeerName,
 		channelTitle,
@@ -122,17 +124,27 @@
 				const payload = JSON.parse(event.data) as ChannelEvent;
 				if (payload.type === 'status') {
 					peerReady = payload.ready;
-					if (payload.ready && payload.peerNameCiphertext) {
+					if (!payload.ready) return;
+					const current = channel;
+					if (!current) return;
+					let peerName = current.peerName;
+					if (payload.peerNameCiphertext) {
 						try {
-							const decryptedName = await decryptName(payload.peerNameCiphertext, privateKey);
-							const current = channel;
-							if (current && decryptedName !== current.peerName) {
-								current.peerName = decryptedName;
-								void putChannel({ ...current, peerName: decryptedName });
-							}
+							peerName = await decryptName(payload.peerNameCiphertext, privateKey);
 						} catch {
 							// ignore a name the pairing key cannot decrypt
 						}
+					}
+					const next = applyReadyExchange(current, {
+						peerName,
+						peerIp: payload.peerIp,
+						localIp: payload.selfIp
+					});
+					if (channelExchangeChanged(current, next)) {
+						current.peerName = next.peerName;
+						current.peerIp = next.peerIp;
+						current.localIp = next.localIp;
+						void putChannel({ ...current });
 					}
 					return;
 				}
@@ -283,12 +295,14 @@
 					<IdentityCard
 						title="Us"
 						names={[endpoint?.name || 'Unnamed']}
+						ip={channel.localIp}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
 					<IdentityCard
 						title="Them"
 						names={themCardNames(channel)}
+						ip={channel.peerIp}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>
@@ -299,6 +313,7 @@
 						variant="row"
 						title="Us"
 						names={[endpoint?.name || 'Unnamed']}
+						ip={channel.localIp}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
@@ -308,6 +323,7 @@
 						variant="row"
 						title="Them"
 						names={themCardNames(channel)}
+						ip={channel.peerIp}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>

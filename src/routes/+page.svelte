@@ -188,7 +188,8 @@
 				peerLifeHash: peerCard.lifeHash,
 				peerName: existing?.peerName ?? '',
 				localAlias: '',
-				peerIp: payload.peerIp
+				peerIp: payload.peerIp,
+				localIp: selfIp
 			});
 			await putChannel(channel);
 			channels = await listChannels();

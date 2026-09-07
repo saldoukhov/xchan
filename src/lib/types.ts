@@ -14,6 +14,7 @@ export type Channel = {
 	peerName: string;
 	localAlias: string;
 	peerIp: string;
+	localIp: string;
 };
 
 export type Endpoint = {
@@ -37,5 +38,11 @@ export type PairEvent =
 	| { type: 'rejected'; reason: 'same-device' };
 
 export type ChannelEvent =
-	| { type: 'status'; ready: boolean; peerNameCiphertext?: string }
+	| {
+			type: 'status';
+			ready: boolean;
+			peerNameCiphertext?: string;
+			peerIp?: string;
+			selfIp?: string;
+	  }
 	| { type: 'message'; ciphertext: string };

@@ -2,12 +2,14 @@
 	let {
 		title,
 		names = [],
+		ip = '',
 		lifeHash,
 		words,
 		variant = 'full'
 	}: {
 		title: string;
 		names?: string[];
+		ip?: string;
 		lifeHash: string;
 		words: string;
 		variant?: 'full' | 'row';
@@ -17,6 +19,7 @@
 	const shownNames = $derived(names.map((name) => name.trim()).filter(Boolean));
 	const fingerprint = $derived(list.slice(0, 3).join(' '));
 	const primaryName = $derived(shownNames[0] ?? '');
+	const shownIp = $derived(ip.trim());
 </script>
 
 {#if variant === 'row'}
@@ -28,17 +31,27 @@
 				<span class="name">{primaryName}</span>
 			{/if}
 			<span class="fp">{fingerprint}</span>
+			{#if shownIp}
+				<span class="ip">{shownIp}</span>
+			{/if}
 		</div>
 	</div>
 {:else}
 	<div class="card">
 		<div class="head">
 			<span class="label">{title}</span>
-			{#if shownNames.length > 0}
-				<div class="names">
-					{#each shownNames as name (name)}
-						<span class="name">{name}</span>
-					{/each}
+			{#if shownNames.length > 0 || shownIp}
+				<div class="head-meta">
+					{#if shownNames.length > 0}
+						<div class="names">
+							{#each shownNames as name (name)}
+								<span class="name">{name}</span>
+							{/each}
+						</div>
+					{/if}
+					{#if shownIp}
+						<span class="ip">{shownIp}</span>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -92,10 +105,18 @@
 		white-space: nowrap;
 	}
 
-	.fp {
+	.fp,
+	.ip {
 		font-family: var(--mono);
 		font-size: 13px;
 		color: var(--ink2);
+	}
+
+	.ip {
+		color: var(--ink3);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.card {
@@ -114,6 +135,14 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 12px;
+		min-width: 0;
+	}
+
+	.head-meta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 4px;
 		min-width: 0;
 	}
 
@@ -181,7 +210,8 @@
 			font-size: 15px;
 		}
 
-		.fp {
+		.fp,
+		.ip {
 			font-size: 12px;
 		}
 

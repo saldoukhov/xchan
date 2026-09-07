@@ -231,22 +231,39 @@ describe('joinChannel', () => {
 	it('exchanges name ciphertext when both peers are ready', () => {
 		const left = sink();
 		const right = sink();
-		joinChannel(pub(1), pub(2), 'ct-MacBook', left);
+		joinChannel(pub(1), pub(2), 'ct-MacBook', '192.0.2.10', left);
 		expect(left.events).toContainEqual({
 			type: 'status',
 			ready: false,
 			peerNameCiphertext: undefined
 		});
-		joinChannel(pub(2), pub(1), 'ct-Pixel', right);
+		joinChannel(pub(2), pub(1), 'ct-Pixel', '192.0.2.20', right);
 		expect(right.events).toContainEqual({
 			type: 'status',
 			ready: true,
-			peerNameCiphertext: 'ct-MacBook'
+			peerNameCiphertext: 'ct-MacBook',
+			peerIp: '192.0.2.10',
+			selfIp: '192.0.2.20'
 		});
 		expect(left.events).toContainEqual({
 			type: 'status',
 			ready: true,
-			peerNameCiphertext: 'ct-Pixel'
+			peerNameCiphertext: 'ct-Pixel',
+			peerIp: '192.0.2.20',
+			selfIp: '192.0.2.10'
+		});
+	});
+
+	it('omits IPs when a peer leaves ready state', () => {
+		const left = sink();
+		const right = sink();
+		const leave = joinChannel(pub(1), pub(2), 'ct-MacBook', '192.0.2.10', left);
+		joinChannel(pub(2), pub(1), 'ct-Pixel', '192.0.2.20', right);
+		leave();
+		expect(right.events.at(-1)).toEqual({
+			type: 'status',
+			ready: false,
+			peerNameCiphertext: undefined
 		});
 	});
 });

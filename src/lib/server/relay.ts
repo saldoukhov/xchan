@@ -31,6 +31,7 @@ type ReadySession = {
 	self: string;
 	peer: string;
 	nameCiphertext: string;
+	ip: string;
 	sink: SseSink;
 };
 
@@ -299,19 +300,41 @@ export function cancelPairing(commit: string): boolean {
 	return removePairing(commit, 'cancelled');
 }
 
-function notifyPeerStatus(
-	self: string,
-	peer: string,
+function statusEvent(
 	ready: boolean,
-	nameCiphertext: string
-): void {
+	exchange?: { nameCiphertext: string; peerIp: string; selfIp: string }
+): {
+	type: 'status';
+	ready: boolean;
+	peerNameCiphertext: string | undefined;
+	peerIp?: string;
+	selfIp?: string;
+} {
+	if (!ready || !exchange) {
+		return { type: 'status', ready: false, peerNameCiphertext: undefined };
+	}
+	return {
+		type: 'status',
+		ready: true,
+		peerNameCiphertext: exchange.nameCiphertext,
+		peerIp: exchange.peerIp,
+		selfIp: exchange.selfIp
+	};
+}
+
+function notifyPeerStatus(self: string, peer: string, ready: boolean): void {
 	const inverse = readySessions.get(peer);
+	const joiner = readySessions.get(self);
 	if (inverse && inverse.peer === self) {
-		inverse.sink.send({
-			type: 'status',
-			ready,
-			peerNameCiphertext: ready ? nameCiphertext : undefined
-		});
+		inverse.sink.send(
+			ready && joiner
+				? statusEvent(true, {
+						nameCiphertext: joiner.nameCiphertext,
+						peerIp: joiner.ip,
+						selfIp: inverse.ip
+					})
+				: statusEvent(false)
+		);
 	}
 }
 
@@ -319,28 +342,33 @@ export function joinChannel(
 	self: string,
 	peer: string,
 	nameCiphertext: string,
+	ip: string,
 	sink: SseSink
 ): () => void {
 	const previous = readySessions.get(self);
 	if (previous) {
 		previous.sink.close();
 	}
-	readySessions.set(self, { self, peer, nameCiphertext, sink });
+	readySessions.set(self, { self, peer, nameCiphertext, ip, sink });
 	const inverse = readySessions.get(peer);
 	const ready = Boolean(inverse && inverse.peer === self);
-	sink.send({
-		type: 'status',
-		ready,
-		peerNameCiphertext: ready ? inverse!.nameCiphertext : undefined
-	});
+	sink.send(
+		ready && inverse
+			? statusEvent(true, {
+					nameCiphertext: inverse.nameCiphertext,
+					peerIp: inverse.ip,
+					selfIp: ip
+				})
+			: statusEvent(false)
+	);
 	if (ready) {
-		notifyPeerStatus(self, peer, true, nameCiphertext);
+		notifyPeerStatus(self, peer, true);
 	}
 	return () => {
 		const current = readySessions.get(self);
 		if (current?.sink === sink) {
 			readySessions.delete(self);
-			notifyPeerStatus(self, peer, false, nameCiphertext);
+			notifyPeerStatus(self, peer, false);
 		}
 	};
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+	applyReadyExchange,
+	channelExchangeChanged,
 	channelHref,
 	channelLabel,
 	channelPeerName,
@@ -29,6 +31,7 @@ function channel(partial: Partial<Channel> = {}): Channel {
 		peerName: 'Pixel',
 		localAlias: '',
 		peerIp: '1.2.3.4',
+		localIp: '10.0.0.1',
 		...partial
 	};
 }
@@ -105,6 +108,32 @@ describe('mergeChannel', () => {
 		const existing = channel({ peerName: 'Pixel' });
 		const incoming = channel({ peerName: '', peerPublicKey: 'new-key' });
 		expect(mergeChannel(existing, incoming).peerName).toBe('Pixel');
+	});
+
+	it('keeps the stored local IP when a re-pair arrives without one', () => {
+		const existing = channel({ localIp: '73.66.155.165' });
+		const incoming = channel({ localIp: '', peerPublicKey: 'new-key' });
+		expect(mergeChannel(existing, incoming).localIp).toBe('73.66.155.165');
+	});
+});
+
+describe('applyReadyExchange', () => {
+	it('stores both parties IPs from a ready status', () => {
+		const updated = applyReadyExchange(channel({ peerIp: '1.2.3.4', localIp: '' }), {
+			peerIp: '198.51.100.20',
+			localIp: '198.51.100.10'
+		});
+		expect(updated.peerIp).toBe('198.51.100.20');
+		expect(updated.localIp).toBe('198.51.100.10');
+		expect(channelExchangeChanged(channel({ peerIp: '1.2.3.4', localIp: '' }), updated)).toBe(true);
+	});
+
+	it('keeps stored IPs when the ready event omits them', () => {
+		const existing = channel({ peerIp: '1.2.3.4', localIp: '10.0.0.1', peerName: 'Pixel' });
+		const updated = applyReadyExchange(existing, { peerName: 'Pixel 2' });
+		expect(updated.peerIp).toBe('1.2.3.4');
+		expect(updated.localIp).toBe('10.0.0.1');
+		expect(updated.peerName).toBe('Pixel 2');
 	});
 });
 

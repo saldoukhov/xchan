@@ -37,8 +37,29 @@ export function mergeChannel(existing: Channel | undefined, incoming: Channel): 
 	return {
 		...incoming,
 		localAlias: incoming.localAlias || existing.localAlias,
-		peerName: incoming.peerName || existing.peerName
+		peerName: incoming.peerName || existing.peerName,
+		localIp: incoming.localIp || existing.localIp
 	};
+}
+
+export function applyReadyExchange(
+	channel: Channel,
+	update: { peerName?: string; peerIp?: string; localIp?: string }
+): Channel {
+	return {
+		...channel,
+		peerName: update.peerName !== undefined ? update.peerName : channel.peerName,
+		peerIp: update.peerIp || channel.peerIp,
+		localIp: update.localIp || channel.localIp || ''
+	};
+}
+
+export function channelExchangeChanged(before: Channel, after: Channel): boolean {
+	return (
+		before.peerName !== after.peerName ||
+		before.peerIp !== after.peerIp ||
+		(before.localIp ?? '') !== (after.localIp ?? '')
+	);
 }
 
 export function findChannelByPeerIdentity(
