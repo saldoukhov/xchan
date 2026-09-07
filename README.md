@@ -5,6 +5,7 @@ Web app for pairing two devices and sending an ephemeral secret — a password, 
 **Live at [xchan.dev](https://xchan.dev).** It is a PWA — install it from the browser on each device.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/xchan)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/saldoukhov/xchan/badge)](https://scorecard.dev/viewer/?uri=github.com/saldoukhov/xchan)
 
 Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(pairing public key || identity public key)` first, then reveal the keys after a FIFO match. Messages, files, and endpoint names are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages. Files up to 50 MiB are sent as encrypted chunks; each relayed ciphertext is capped at 1 MiB.
 
