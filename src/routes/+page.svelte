@@ -408,11 +408,31 @@
 
 <main>
 	<header class="top">
-		<div>
-			<h1>XChan</h1>
-			<p class="lede">Pair two devices and send an ephemeral secret. The server only relays.</p>
+		<h1>XChan</h1>
+		<div class="top-actions">
+			<nav class="outlinks" aria-label="XChan elsewhere">
+				<a
+					class="icon"
+					href="https://github.com/saldoukhov/xchan"
+					target="_blank"
+					rel="noreferrer"
+					aria-label="GitHub"
+				>
+					<Icon name="github" />
+				</a>
+				<a
+					class="icon"
+					href="https://x.com/saldoukhov"
+					target="_blank"
+					rel="noreferrer"
+					aria-label="X"
+				>
+					<Icon name="x" />
+				</a>
+			</nav>
+			<button type="button" class="ghost danger" onclick={openReset}>Reset</button>
 		</div>
-		<button type="button" class="ghost danger reset" onclick={openReset}>Reset</button>
+		<p class="lede">Pair two devices and send an ephemeral secret. The server only relays.</p>
 	</header>
 
 	{#if loadError}
@@ -609,15 +629,26 @@
 
 <style>
 	.top {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		column-gap: 1rem;
+		align-items: center;
 	}
 
-	.reset {
-		flex-shrink: 0;
-		margin-top: 0.15rem;
+	.top-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.outlinks {
+		display: flex;
+		align-items: center;
+		gap: 0.1rem;
+	}
+
+	.lede {
+		grid-column: 1 / -1;
 	}
 
 	.section-head {
@@ -841,10 +872,6 @@
 
 		.finger-mobile {
 			display: block;
-		}
-
-		.top {
-			align-items: center;
 		}
 
 		.lede {
