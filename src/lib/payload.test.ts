@@ -141,7 +141,10 @@ describe('encodePayload / decodePayload', () => {
 			bytes
 		});
 		expect(encoded.byteLength).toBeLessThanOrEqual(MAX_PLAINTEXT_BYTES);
-		expect(encoded.byteLength + 65 + 12 + 16).toBeLessThanOrEqual(MAX_CIPHERTEXT_BYTES);
+		const ciphertextBytes = encoded.byteLength + 65 + 12 + 16;
+		expect(ciphertextBytes).toBeLessThanOrEqual(MAX_CIPHERTEXT_BYTES);
+		const jsonBytes = 4 * Math.ceil(ciphertextBytes / 3) + 256;
+		expect(jsonBytes).toBeLessThan(512 * 1024);
 	});
 
 	it('encrypts a file chunk the peer can decrypt under the ciphertext cap', async () => {

@@ -1,5 +1,5 @@
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
-export const CHUNK_DATA_BYTES = 512 * 1024;
+export const CHUNK_DATA_BYTES = 256 * 1024;
 export const MAX_FILENAME_BYTES = 180;
 export const MAX_MIME_BYTES = 127;
 const TRANSFER_ID_LEN = 16;

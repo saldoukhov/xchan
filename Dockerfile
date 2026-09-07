@@ -12,5 +12,6 @@ RUN npm run build
 
 ENV ADDRESS_HEADER=X-Forwarded-For
 ENV XFF_DEPTH=1
+ENV BODY_SIZE_LIMIT=2M
 
 CMD ["npm", "run", "start"]

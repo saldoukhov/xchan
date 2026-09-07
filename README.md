@@ -37,7 +37,7 @@ npm run build
 npm start
 ```
 
-`npm start` serves the production build (`node build`) and uses `PORT` when set.
+`npm start` serves the production build (`node build`) and uses `PORT` when set. It also sets `BODY_SIZE_LIMIT=2M` so file chunks are accepted (`adapter-node` defaults to 512kb).
 
 ## Deploy on Railway
 
