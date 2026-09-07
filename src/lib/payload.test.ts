@@ -8,6 +8,7 @@ import {
 	MAX_FILENAME_BYTES,
 	MAX_PLAINTEXT_BYTES,
 	PayloadTooLargeError,
+	FileUnreadableError,
 	attachLocalFile,
 	chunkByteLength,
 	chunkCount,
@@ -277,25 +278,42 @@ describe('FileAssembler', () => {
 });
 
 describe('attachLocalFile', () => {
-	it('keeps a small file handle without copying bytes', () => {
+	it('copies file bytes so later reads do not need the original handle', async () => {
 		const file = new File([new Uint8Array([9, 8, 7])], 'key.pem', {
 			type: 'application/x-pem-file'
 		});
-		expect(attachLocalFile(file)).toEqual({
-			name: 'key.pem',
-			type: 'application/x-pem-file',
-			size: 3,
-			file
-		});
+		const attached = await attachLocalFile(file);
+		expect(attached.name).toBe('key.pem');
+		expect(attached.type).toBe('application/x-pem-file');
+		expect(attached.size).toBe(3);
+		expect(attached.file).not.toBe(file);
+		expect(new Uint8Array(await attached.file.arrayBuffer())).toEqual(new Uint8Array([9, 8, 7]));
 	});
 
-	it('rejects a file over the cap without reading it', () => {
+	it('rejects a file over the cap without reading it', async () => {
 		const file = {
 			name: 'big.bin',
 			type: '',
 			size: MAX_FILE_BYTES + 1
 		} as File;
-		expect(() => attachLocalFile(file)).toThrow(PayloadTooLargeError);
+		await expect(attachLocalFile(file)).rejects.toBeInstanceOf(PayloadTooLargeError);
+	});
+
+	it('throws when the picker file cannot be read', async () => {
+		const file = {
+			name: 'icloud.bin',
+			type: '',
+			size: 4,
+			lastModified: 0,
+			slice() {
+				return {
+					arrayBuffer() {
+						return Promise.reject(new Error('NotReadableError'));
+					}
+				};
+			}
+		} as unknown as File;
+		await expect(attachLocalFile(file)).rejects.toBeInstanceOf(FileUnreadableError);
 	});
 });
 

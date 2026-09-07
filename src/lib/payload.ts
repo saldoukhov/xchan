@@ -56,6 +56,38 @@ export class InvalidPayloadError extends Error {
 	}
 }
 
+export class FileUnreadableError extends Error {
+	constructor() {
+		super('Could not read that file. If it is in iCloud, download it to this device first.');
+		this.name = 'FileUnreadableError';
+	}
+}
+
+function readWithFileReader(blob: Blob): Promise<ArrayBuffer> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+			else reject(new FileUnreadableError());
+		};
+		reader.onerror = () => reject(new FileUnreadableError());
+		reader.readAsArrayBuffer(blob);
+	});
+}
+
+/** Copy file bytes now. iOS iCloud Drive handles go stale after the picker closes. */
+export async function readFileBytes(file: File): Promise<ArrayBuffer> {
+	try {
+		return await readWithFileReader(file);
+	} catch {
+		try {
+			return await file.slice(0, file.size).arrayBuffer();
+		} catch {
+			throw new FileUnreadableError();
+		}
+	}
+}
+
 function utf8Truncate(value: string, maxBytes: number): string {
 	const encoder = new TextEncoder();
 	if (encoder.encode(value).byteLength <= maxBytes) return value;
@@ -152,13 +184,17 @@ export function chunkByteLength(fileSize: number, index: number): number {
 	return CHUNK_DATA_BYTES;
 }
 
-export function attachLocalFile(file: File): AttachedFile {
+export async function attachLocalFile(file: File): Promise<AttachedFile> {
 	if (file.size > MAX_FILE_BYTES) throw new PayloadTooLargeError();
+	const bytes = await readFileBytes(file);
+	if (bytes.byteLength > MAX_FILE_BYTES) throw new PayloadTooLargeError();
+	const name = sanitizeFilename(file.name);
+	const type = sanitizeMime(file.type);
 	return {
-		name: sanitizeFilename(file.name),
-		type: sanitizeMime(file.type),
-		size: file.size,
-		file
+		name,
+		type,
+		size: bytes.byteLength,
+		file: new File([bytes], name, { type, lastModified: file.lastModified })
 	};
 }
 
@@ -168,7 +204,11 @@ export async function readFileChunk(file: File, index: number): Promise<Uint8Arr
 	if (start > file.size || (start === file.size && file.size > 0)) {
 		throw new InvalidPayloadError();
 	}
-	return new Uint8Array(await file.slice(start, end).arrayBuffer());
+	try {
+		return new Uint8Array(await file.slice(start, end).arrayBuffer());
+	} catch {
+		throw new FileUnreadableError();
+	}
 }
 
 export function encodePayload(payload: Payload): Uint8Array {

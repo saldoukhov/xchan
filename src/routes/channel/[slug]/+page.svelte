@@ -20,6 +20,7 @@
 	import IdentityCard from '$lib/IdentityCard.svelte';
 	import {
 		FileAssembler,
+		FileUnreadableError,
 		MAX_FILE_BYTES,
 		PayloadTooLargeError,
 		attachLocalFile,
@@ -53,6 +54,7 @@
 	let previewUrl = $state('');
 	let sendNote = $state('');
 	let sending = $state(false);
+	let attaching = $state(false);
 	let sendProgress = $state(0);
 	let copied = $state(false);
 	let sent = $state(false);
@@ -71,7 +73,9 @@
 	const heading = $derived(channel ? channelTitle(channel) : '');
 	const peerName = $derived(channel ? channelPeerName(channel) : '');
 	const draftCount = $derived(draft.length);
-	const canSend = $derived(peerReady && !sending && (attached !== null || draft.length > 0));
+	const canSend = $derived(
+		peerReady && !sending && !attaching && (attached !== null || draft.length > 0)
+	);
 	const receivedClock = $derived(receivedAt ? formatClock(receivedAt) : '');
 	const receivedText = $derived(lastReceived?.kind === 'text' ? lastReceived.text : '');
 	const receivedFile = $derived(lastReceived?.kind === 'file' ? lastReceived : null);
@@ -166,6 +170,7 @@
 		peerReady = false;
 		draft = '';
 		attached = null;
+		attaching = false;
 		copied = false;
 		sent = false;
 		sendProgress = 0;
@@ -352,7 +357,7 @@
 			}, 1500);
 		} catch (err) {
 			if (abort.signal.aborted) return;
-			if (err instanceof PayloadTooLargeError) {
+			if (err instanceof PayloadTooLargeError || err instanceof FileUnreadableError) {
 				sendNote = err.message;
 			} else if (err instanceof Error && err.message === 'peer is not ready') {
 				sendNote = 'Peer is not ready.';
@@ -366,13 +371,20 @@
 		}
 	}
 
-	function attachFile(file: File) {
+	async function attachFile(file: File) {
 		sendNote = '';
+		attaching = true;
+		attached = null;
 		try {
-			attached = attachLocalFile(file);
+			attached = await attachLocalFile(file);
 		} catch (err) {
 			attached = null;
-			sendNote = err instanceof PayloadTooLargeError ? err.message : 'Could not read that file.';
+			sendNote =
+				err instanceof PayloadTooLargeError || err instanceof FileUnreadableError
+					? err.message
+					: 'Could not read that file. If it is in iCloud, download it to this device first.';
+		} finally {
+			attaching = false;
 		}
 	}
 
@@ -576,7 +588,14 @@
 			>
 				<span class="kicker">Send</span>
 				<input bind:this={fileInput} class="sr-only" type="file" onchange={onFileInput} />
-				{#if attached}
+				{#if attaching}
+					<div class="file-chip">
+						<Icon name="file" size={18} />
+						<div class="file-meta">
+							<span class="file-name">Reading file…</span>
+						</div>
+					</div>
+				{:else if attached}
 					<div class="file-chip">
 						<Icon name="file" size={18} />
 						<div class="file-meta">
@@ -640,7 +659,7 @@
 							type="button"
 							class="icon outlined"
 							aria-label="Attach a file"
-							disabled={sending}
+							disabled={sending || attaching}
 							onclick={() => fileInput?.click()}
 						>
 							<Icon name="attach" size={18} />
