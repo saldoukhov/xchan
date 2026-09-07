@@ -83,6 +83,12 @@ describe('mergeChannel', () => {
 		expect(merged.peerName).toBe('Pixel 2');
 		expect(merged.peerIdentityPublicKey).toBe('peer-id');
 	});
+
+	it('keeps the stored peer name when a re-pair arrives without one', () => {
+		const existing = channel({ peerName: 'Pixel' });
+		const incoming = channel({ peerName: '', peerPublicKey: 'new-key' });
+		expect(mergeChannel(existing, incoming).peerName).toBe('Pixel');
+	});
 });
 
 describe('themCardNames', () => {

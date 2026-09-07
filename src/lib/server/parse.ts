@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { base64ToBytes, isUncompressedP256 } from '$lib/crypto/bytes';
 import { isSha256Commit } from '$lib/crypto/hash';
-import { MAX_CIPHERTEXT_BYTES, MAX_NAME_CHARS } from './relay';
+import { MAX_CIPHERTEXT_BYTES } from './relay';
 
 export function parsePublicKey(value: string | null): string {
 	if (!value) {
@@ -33,14 +33,6 @@ export function parseCommit(value: string | null): string {
 		error(400, 'invalid commit');
 	}
 	return value;
-}
-
-export function sanitizeName(name: string | null | undefined): string {
-	if (!name) return '';
-	return [...name]
-		.filter((ch) => ch >= ' ')
-		.join('')
-		.slice(0, MAX_NAME_CHARS);
 }
 
 export function parseCiphertext(value: unknown): string {

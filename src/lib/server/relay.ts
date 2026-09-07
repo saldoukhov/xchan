@@ -11,7 +11,6 @@ import type { SseSink } from './sse';
 
 export { PAIRING_MS };
 export const MAX_CIPHERTEXT_BYTES = 64 * 1024;
-export const MAX_NAME_CHARS = 64;
 
 export type PairingAdmission =
 	{ ok: true } | { ok: false; status: 429 | 503; retryAfterSec: number; message: string };
@@ -20,7 +19,6 @@ type PairingEntry = {
 	commit: string;
 	publicKey: string | null;
 	identityPublicKey: string;
-	name: string;
 	ip: string;
 	sink: SseSink;
 	timer: ReturnType<typeof setTimeout>;
@@ -32,7 +30,7 @@ export type RevealResult = 'ok' | 'unknown' | 'mismatch' | 'too_early';
 type ReadySession = {
 	self: string;
 	peer: string;
-	name: string;
+	nameCiphertext: string;
 	sink: SseSink;
 };
 
@@ -203,14 +201,12 @@ function completePair(aEntry: PairingEntry, bEntry: PairingEntry): void {
 		type: 'paired',
 		peerPublicKey: bEntry.publicKey,
 		peerIdentityPublicKey: bEntry.identityPublicKey,
-		peerName: bEntry.name,
 		peerIp: bEntry.ip
 	});
 	bEntry.sink.send({
 		type: 'paired',
 		peerPublicKey: aEntry.publicKey,
 		peerIdentityPublicKey: aEntry.identityPublicKey,
-		peerName: aEntry.name,
 		peerIp: aEntry.ip
 	});
 	queueMicrotask(() => {
@@ -239,7 +235,6 @@ function rejectSameDevice(aEntry: PairingEntry, bEntry: PairingEntry): void {
 export function joinPairing(
 	commit: string,
 	identityPublicKey: string,
-	name: string,
 	ip: string,
 	sink: SseSink
 ): () => void {
@@ -257,7 +252,6 @@ export function joinPairing(
 		commit,
 		publicKey: null,
 		identityPublicKey,
-		name,
 		ip,
 		sink,
 		peer: null,
@@ -305,30 +299,48 @@ export function cancelPairing(commit: string): boolean {
 	return removePairing(commit, 'cancelled');
 }
 
-function notifyPeerStatus(self: string, peer: string, ready: boolean, name: string): void {
+function notifyPeerStatus(
+	self: string,
+	peer: string,
+	ready: boolean,
+	nameCiphertext: string
+): void {
 	const inverse = readySessions.get(peer);
 	if (inverse && inverse.peer === self) {
-		inverse.sink.send({ type: 'status', ready, peerName: name });
+		inverse.sink.send({
+			type: 'status',
+			ready,
+			peerNameCiphertext: ready ? nameCiphertext : undefined
+		});
 	}
 }
 
-export function joinChannel(self: string, peer: string, name: string, sink: SseSink): () => void {
+export function joinChannel(
+	self: string,
+	peer: string,
+	nameCiphertext: string,
+	sink: SseSink
+): () => void {
 	const previous = readySessions.get(self);
 	if (previous) {
 		previous.sink.close();
 	}
-	readySessions.set(self, { self, peer, name, sink });
+	readySessions.set(self, { self, peer, nameCiphertext, sink });
 	const inverse = readySessions.get(peer);
 	const ready = Boolean(inverse && inverse.peer === self);
-	sink.send({ type: 'status', ready, peerName: ready ? inverse!.name : undefined });
+	sink.send({
+		type: 'status',
+		ready,
+		peerNameCiphertext: ready ? inverse!.nameCiphertext : undefined
+	});
 	if (ready) {
-		notifyPeerStatus(self, peer, true, name);
+		notifyPeerStatus(self, peer, true, nameCiphertext);
 	}
 	return () => {
 		const current = readySessions.get(self);
 		if (current?.sink === sink) {
 			readySessions.delete(self);
-			notifyPeerStatus(self, peer, false, name);
+			notifyPeerStatus(self, peer, false, nameCiphertext);
 		}
 	};
 }

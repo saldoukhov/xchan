@@ -16,6 +16,7 @@
 	import { deleteChannel, listChannels, putChannel } from '$lib/db';
 	import IdentityCard from '$lib/IdentityCard.svelte';
 	import Icon from '$lib/Icon.svelte';
+	import { sanitizeName } from '$lib/name';
 	import { PAIRING_SECONDS } from '$lib/pairing';
 	import type { Channel, Endpoint, PairEvent } from '$lib/types';
 
@@ -73,8 +74,7 @@
 
 	async function saveName() {
 		if (!endpoint) return;
-		const name = nameDraft.trim().slice(0, 64);
-		endpoint = await saveEndpointName(endpoint, name);
+		endpoint = await saveEndpointName(endpoint, sanitizeName(nameDraft));
 		editingName = false;
 	}
 
@@ -168,7 +168,7 @@
 				peerFingerprint: peerCard.fingerprint,
 				peerWords: peerCard.words,
 				peerLifeHash: peerCard.lifeHash,
-				peerName: payload.peerName,
+				peerName: existing?.peerName ?? '',
 				localAlias: '',
 				peerIp: payload.peerIp
 			});
@@ -203,7 +203,7 @@
 		pairingOffer = offer;
 		const controller = new AbortController();
 		pairAbort = controller;
-		const url = `/api/pair/events?commit=${encodeURIComponent(offer.commit)}&identityPublicKey=${encodeURIComponent(offer.identityPublicKey)}&name=${encodeURIComponent(endpoint.name)}`;
+		const url = `/api/pair/events?commit=${encodeURIComponent(offer.commit)}&identityPublicKey=${encodeURIComponent(offer.identityPublicKey)}`;
 		pairTimer = setInterval(() => {
 			pairingSeconds = Math.max(0, pairingSeconds - 1);
 			if (pairingSeconds === 0) {

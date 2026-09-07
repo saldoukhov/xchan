@@ -5,6 +5,7 @@
 	import { channelLabel, findChannelBySlug, themCardNames } from '$lib/channel';
 	import { base64ToBytes, bytesToBase64 } from '$lib/crypto/bytes';
 	import { decrypt, encrypt } from '$lib/crypto/ecies';
+	import { decryptName, encryptName } from '$lib/name';
 	import { loadOrCreateEndpoint } from '$lib/crypto/keys';
 	import { listChannels, putChannel } from '$lib/db';
 	import Icon from '$lib/Icon.svelte';
@@ -74,36 +75,58 @@
 		draft = '';
 		copied = false;
 		sent = false;
-		const url = `/api/channel/events?self=${encodeURIComponent(selfKey)}&peer=${encodeURIComponent(peer)}&name=${encodeURIComponent(selfName)}`;
-		const es = new EventSource(url);
-		es.onmessage = async (event) => {
-			const payload = JSON.parse(event.data) as ChannelEvent;
-			if (payload.type === 'status') {
-				peerReady = payload.ready;
-				if (payload.ready && payload.peerName !== undefined && channel) {
-					if (payload.peerName !== channel.peerName) {
-						const updated = { ...channel, peerName: payload.peerName };
-						channel = updated;
-						void putChannel(updated);
-					}
-				}
+		let cancelled = false;
+		let es: EventSource | null = null;
+		void (async () => {
+			let nameCiphertext: string;
+			try {
+				nameCiphertext = await encryptName(selfName, peer);
+			} catch {
+				if (!cancelled) sendNote = 'Could not open this channel.';
 				return;
 			}
-			if (payload.type === 'message') {
-				try {
-					const plain = await decrypt(base64ToBytes(payload.ciphertext), privateKey);
-					lastReceived = new TextDecoder().decode(plain);
-					sendNote = '';
-				} catch {
-					sendNote = 'Received a message that could not be decrypted.';
-				}
+			if (cancelled) return;
+			const url = `/api/channel/events?self=${encodeURIComponent(selfKey)}&peer=${encodeURIComponent(peer)}&nameCiphertext=${encodeURIComponent(nameCiphertext)}`;
+			es = new EventSource(url);
+			if (cancelled) {
+				es.close();
+				return;
 			}
-		};
-		es.onerror = () => {
-			peerReady = false;
-		};
+			es.onmessage = async (event) => {
+				const payload = JSON.parse(event.data) as ChannelEvent;
+				if (payload.type === 'status') {
+					peerReady = payload.ready;
+					if (payload.ready && payload.peerNameCiphertext) {
+						try {
+							const peerName = await decryptName(payload.peerNameCiphertext, privateKey);
+							const current = channel;
+							if (current && peerName !== current.peerName) {
+								current.peerName = peerName;
+								void putChannel({ ...current, peerName });
+							}
+						} catch {
+							// ignore a name the pairing key cannot decrypt
+						}
+					}
+					return;
+				}
+				if (payload.type === 'message') {
+					try {
+						const plain = await decrypt(base64ToBytes(payload.ciphertext), privateKey);
+						lastReceived = new TextDecoder().decode(plain);
+						sendNote = '';
+					} catch {
+						sendNote = 'Received a message that could not be decrypted.';
+					}
+				}
+			};
+			es.onerror = () => {
+				peerReady = false;
+			};
+		})();
 		return () => {
-			es.close();
+			cancelled = true;
+			es?.close();
 		};
 	});
 

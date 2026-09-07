@@ -28,7 +28,6 @@ function event(commit: string, ip: string): Parameters<RequestHandler>[0] {
 	const url = new URL('http://localhost/api/pair/events');
 	url.searchParams.set('commit', commit);
 	url.searchParams.set('identityPublicKey', pub(1));
-	url.searchParams.set('name', 'Test');
 	return {
 		url,
 		request: new Request(url, { headers: { Accept: 'text/event-stream' } }),
@@ -55,7 +54,7 @@ function sink(): SseSink {
 describe('GET /api/pair/events', () => {
 	it('returns 429 with Retry-After before opening SSE when joins are exhausted', async () => {
 		for (let i = 1; i <= JOIN_MAX; i += 1) {
-			joinPairing(commitId(i), pub(i), 'A', '192.0.2.1', sink());
+			joinPairing(commitId(i), pub(i), '192.0.2.1', sink());
 			cancelPairing(commitId(i));
 		}
 		const blocked = await GET(event(commitId(9), '192.0.2.1'));

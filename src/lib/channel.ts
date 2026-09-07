@@ -24,7 +24,8 @@ export function mergeChannel(existing: Channel | undefined, incoming: Channel): 
 	if (!existing) return incoming;
 	return {
 		...incoming,
-		localAlias: incoming.localAlias || existing.localAlias
+		localAlias: incoming.localAlias || existing.localAlias,
+		peerName: incoming.peerName || existing.peerName
 	};
 }
 

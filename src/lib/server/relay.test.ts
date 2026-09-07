@@ -52,8 +52,8 @@ function idPub(n: number): string {
 async function pair(a: number, b: number, ipA: string, ipB = ipA): Promise<void> {
 	const commitA = await commitOfPairing(pub(a), idPub(a));
 	const commitB = await commitOfPairing(pub(b), idPub(b));
-	joinPairing(commitA, idPub(a), 'A', ipA, sink());
-	joinPairing(commitB, idPub(b), 'B', ipB, sink());
+	joinPairing(commitA, idPub(a), ipA, sink());
+	joinPairing(commitB, idPub(b), ipB, sink());
 	expect(await revealPairing(commitA, pub(a), idPub(a))).toBe('ok');
 	expect(await revealPairing(commitB, pub(b), idPub(b))).toBe('ok');
 }
@@ -73,8 +73,8 @@ describe('pairing', () => {
 		const right = sink();
 		const commitA = await commitOfPairing(pub(1), idPub(1));
 		const commitB = await commitOfPairing(pub(2), idPub(2));
-		joinPairing(commitA, idPub(1), 'MacBook', '192.0.2.10', left);
-		joinPairing(commitB, idPub(2), 'Pixel', '192.0.2.20', right);
+		joinPairing(commitA, idPub(1), '192.0.2.10', left);
+		joinPairing(commitB, idPub(2), '192.0.2.20', right);
 		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitB });
 		expect(right.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
 		expect(left.events.some((event) => (event as { type?: string }).type === 'paired')).toBe(false);
@@ -85,14 +85,12 @@ describe('pairing', () => {
 			type: 'paired',
 			peerPublicKey: pub(2),
 			peerIdentityPublicKey: idPub(2),
-			peerName: 'Pixel',
 			peerIp: '192.0.2.20'
 		});
 		expect(right.events).toContainEqual({
 			type: 'paired',
 			peerPublicKey: pub(1),
 			peerIdentityPublicKey: idPub(1),
-			peerName: 'MacBook',
 			peerIp: '192.0.2.10'
 		});
 	});
@@ -100,8 +98,8 @@ describe('pairing', () => {
 	it('rejects a reveal that does not match the commit', async () => {
 		const commitA = await commitOfPairing(pub(1), idPub(1));
 		const commitB = await commitOfPairing(pub(2), idPub(2));
-		joinPairing(commitA, idPub(1), 'A', '192.0.2.10', sink());
-		joinPairing(commitB, idPub(2), 'B', '192.0.2.20', sink());
+		joinPairing(commitA, idPub(1), '192.0.2.10', sink());
+		joinPairing(commitB, idPub(2), '192.0.2.20', sink());
 		expect(await revealPairing(commitA, pub(2), idPub(1))).toBe('mismatch');
 	});
 
@@ -110,8 +108,8 @@ describe('pairing', () => {
 		const right = sink();
 		const commitA = await commitOfPairing(pub(1), idPub(1));
 		const commitB = await commitOfPairing(pub(2), idPub(2));
-		joinPairing(commitA, idPub(1), 'A', '192.0.2.10', left);
-		joinPairing(commitB, idPub(2), 'B', '192.0.2.20', right);
+		joinPairing(commitA, idPub(1), '192.0.2.10', left);
+		joinPairing(commitB, idPub(2), '192.0.2.20', right);
 		cancelPairing(commitA);
 		expect(right.events).toContainEqual({ type: 'cancelled' });
 	});
@@ -123,13 +121,13 @@ describe('pairing', () => {
 		const commitA = await commitOfPairing(pub(1), idPub(1));
 		const commitB = await commitOfPairing(pub(2), idPub(1));
 		const commitC = await commitOfPairing(pub(3), idPub(3));
-		joinPairing(commitA, idPub(1), 'Tab A', '192.0.2.10', left);
-		joinPairing(commitB, idPub(1), 'Tab B', '192.0.2.10', right);
+		joinPairing(commitA, idPub(1), '192.0.2.10', left);
+		joinPairing(commitB, idPub(1), '192.0.2.10', right);
 		expect(left.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(false);
 		expect(right.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
 			false
 		);
-		joinPairing(commitC, idPub(3), 'Phone', '198.51.100.1', extra);
+		joinPairing(commitC, idPub(3), '198.51.100.1', extra);
 		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitC });
 		expect(extra.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
 		expect(right.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
@@ -142,11 +140,11 @@ describe('admitPairing', () => {
 	it('allows a reconnect of the same public key without charging a join', () => {
 		expect(admitPairing(commitId(1), '192.0.2.1').ok).toBe(true);
 		expect(admitPairing(commitId(1), '192.0.2.1').ok).toBe(true);
-		joinPairing(commitId(1), pub(1), 'A', '192.0.2.1', sink());
+		joinPairing(commitId(1), pub(1), '192.0.2.1', sink());
 		cancelPairing(commitId(1));
 		for (let i = 2; i <= JOIN_MAX; i += 1) {
 			expect(admitPairing(commitId(i), '192.0.2.1').ok).toBe(true);
-			joinPairing(commitId(i), pub(i), 'A', '192.0.2.1', sink());
+			joinPairing(commitId(i), pub(i), '192.0.2.1', sink());
 			cancelPairing(commitId(i));
 		}
 		const blocked = admitPairing(commitId(9), '192.0.2.1');
@@ -157,7 +155,7 @@ describe('admitPairing', () => {
 	it('rejects a fifth join from the same IP inside a minute', () => {
 		for (let i = 1; i <= JOIN_MAX; i += 1) {
 			expect(admitPairing(commitId(i), '192.0.2.1').ok).toBe(true);
-			joinPairing(commitId(i), pub(i), 'A', '192.0.2.1', sink());
+			joinPairing(commitId(i), pub(i), '192.0.2.1', sink());
 			cancelPairing(commitId(i));
 		}
 		expect(admitPairing(commitId(8), '192.0.2.1')).toMatchObject({ ok: false, status: 429 });
@@ -199,7 +197,7 @@ describe('admitPairing', () => {
 	it('uses a stricter join cap for unknown IPs', () => {
 		for (let i = 1; i <= JOIN_MAX_UNKNOWN; i += 1) {
 			expect(admitPairing(commitId(i), '').ok).toBe(true);
-			joinPairing(commitId(i), pub(i), 'A', '', sink());
+			joinPairing(commitId(i), pub(i), '', sink());
 			cancelPairing(commitId(i));
 		}
 		expect(admitPairing(commitId(9), '')).toMatchObject({ ok: false, status: 429 });
@@ -230,13 +228,25 @@ describe('admitPairing', () => {
 });
 
 describe('joinChannel', () => {
-	it('exchanges endpoint names when both peers are ready', () => {
+	it('exchanges name ciphertext when both peers are ready', () => {
 		const left = sink();
 		const right = sink();
-		joinChannel(pub(1), pub(2), 'MacBook', left);
-		expect(left.events).toContainEqual({ type: 'status', ready: false, peerName: undefined });
-		joinChannel(pub(2), pub(1), 'Pixel', right);
-		expect(right.events).toContainEqual({ type: 'status', ready: true, peerName: 'MacBook' });
-		expect(left.events).toContainEqual({ type: 'status', ready: true, peerName: 'Pixel' });
+		joinChannel(pub(1), pub(2), 'ct-MacBook', left);
+		expect(left.events).toContainEqual({
+			type: 'status',
+			ready: false,
+			peerNameCiphertext: undefined
+		});
+		joinChannel(pub(2), pub(1), 'ct-Pixel', right);
+		expect(right.events).toContainEqual({
+			type: 'status',
+			ready: true,
+			peerNameCiphertext: 'ct-MacBook'
+		});
+		expect(left.events).toContainEqual({
+			type: 'status',
+			ready: true,
+			peerNameCiphertext: 'ct-Pixel'
+		});
 	});
 });

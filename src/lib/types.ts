@@ -30,7 +30,6 @@ export type PairEvent =
 			type: 'paired';
 			peerPublicKey: string;
 			peerIdentityPublicKey: string;
-			peerName: string;
 			peerIp: string;
 	  }
 	| { type: 'timeout' }
@@ -38,4 +37,5 @@ export type PairEvent =
 	| { type: 'rejected'; reason: 'same-device' };
 
 export type ChannelEvent =
-	{ type: 'status'; ready: boolean; peerName?: string } | { type: 'message'; ciphertext: string };
+	| { type: 'status'; ready: boolean; peerNameCiphertext?: string }
+	| { type: 'message'; ciphertext: string };

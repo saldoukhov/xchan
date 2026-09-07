@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { parseCommit, parsePublicKey, sanitizeName } from '$lib/server/parse';
+import { parseCommit, parsePublicKey } from '$lib/server/parse';
 import { admitPairing, joinPairing, type PairingAdmission } from '$lib/server/relay';
 import { createSse } from '$lib/server/sse';
 
@@ -17,7 +17,6 @@ function admissionResponse(result: Extract<PairingAdmission, { ok: false }>): Re
 export const GET: RequestHandler = ({ url, request, getClientAddress }) => {
 	const commit = parseCommit(url.searchParams.get('commit'));
 	const identityPublicKey = parsePublicKey(url.searchParams.get('identityPublicKey'));
-	const name = sanitizeName(url.searchParams.get('name'));
 	let ip = '';
 	try {
 		ip = getClientAddress();
@@ -28,5 +27,5 @@ export const GET: RequestHandler = ({ url, request, getClientAddress }) => {
 	if (!admitted.ok) {
 		return admissionResponse(admitted);
 	}
-	return createSse(request, (sink) => joinPairing(commit, identityPublicKey, name, ip, sink));
+	return createSse(request, (sink) => joinPairing(commit, identityPublicKey, ip, sink));
 };

@@ -6,7 +6,7 @@ Web app for pairing two devices and sending an ephemeral secret (for example a p
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/xchan)
 
-Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(public key)` first, then reveal the keys after a FIFO match. Messages are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages.
+Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(pairing public key || identity public key)` first, then reveal the keys after a FIFO match. Messages and endpoint names are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages.
 
 ## How it works
 
@@ -67,6 +67,6 @@ Then generate a public domain in the service settings.
 
 ## Security notes
 
-- The relay can see ciphertext, pairing commits, public keys after reveal, IPs, and names — not plaintext.
+- The relay can see ciphertext, pairing commits, public keys after reveal, and IPs — not names or message plaintext.
 - Compare LifeHash and the 24-word grid across both devices before sending. The three-word list label is not the security check.
 - Anyone who can reach your instance can enter the pairing queue, subject to in-memory IP throttles (joins and successful matches), two concurrent waiters per IP, and a global queue cap. Limits reset when the process restarts.
