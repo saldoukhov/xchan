@@ -7,8 +7,8 @@
 	"id": "/",
 	"display": "standalone",
 	"orientation": "any",
-	"background_color": "#0e120c",
-	"theme_color": "#0e120c",
+	"background_color": "#000000",
+	"theme_color": "#000000",
 	"lang": "en",
 	"categories": ["utilities"],
 	"icons": [

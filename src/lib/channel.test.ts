@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	channelHref,
 	channelLabel,
+	channelPeerName,
 	channelSlug,
+	channelTitle,
 	findChannelByPeerIdentity,
 	findChannelBySlug,
 	mergeChannel,
@@ -58,6 +60,21 @@ describe('channelLabel', () => {
 		expect(channelLabel(channel())).toBe('Pixel');
 		expect(channelLabel(channel({ localAlias: 'Work phone' }))).toBe('Work phone (Pixel)');
 		expect(channelLabel(channel({ peerName: '', localAlias: '' }))).toBe('Unnamed endpoint');
+	});
+});
+
+describe('channelTitle', () => {
+	it('prefers the local alias, then the peer name', () => {
+		expect(channelTitle(channel({ localAlias: "Bob's iPhone" }))).toBe("Bob's iPhone");
+		expect(channelTitle(channel())).toBe('Pixel');
+		expect(channelTitle(channel({ peerName: '', localAlias: '' }))).toBe('Unnamed endpoint');
+	});
+});
+
+describe('channelPeerName', () => {
+	it('returns the trimmed peer endpoint name', () => {
+		expect(channelPeerName(channel())).toBe('Pixel');
+		expect(channelPeerName(channel({ peerName: '  ' }))).toBe('');
 	});
 });
 

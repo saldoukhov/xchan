@@ -7,6 +7,18 @@ export function channelLabel(channel: Channel): string {
 	return channel.localAlias || channel.peerName || 'Unnamed endpoint';
 }
 
+export function channelTitle(channel: Channel): string {
+	const alias = channel.localAlias.trim();
+	if (alias) return alias;
+	const peer = channel.peerName.trim();
+	if (peer) return peer;
+	return 'Unnamed endpoint';
+}
+
+export function channelPeerName(channel: Channel): string {
+	return channel.peerName.trim();
+}
+
 export function channelSlug(fingerprint: string): string {
 	return fingerprint.trim().toLowerCase().split(/\s+/).filter(Boolean).join('-');
 }

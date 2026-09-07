@@ -18,6 +18,7 @@
 	import Icon from '$lib/Icon.svelte';
 	import { sanitizeName } from '$lib/name';
 	import { PAIRING_SECONDS } from '$lib/pairing';
+	import { themeState, toggleTheme } from '$lib/theme.svelte';
 	import type { Channel, Endpoint, PairEvent } from '$lib/types';
 
 	let endpoint = $state<Endpoint | null>(null);
@@ -39,6 +40,8 @@
 	let aliasInput = $state<HTMLInputElement | undefined>(undefined);
 
 	let resetDialog = $state<HTMLDialogElement | undefined>(undefined);
+	let menuOpen = $state(false);
+	let menuWrap = $state<HTMLDivElement | undefined>(undefined);
 
 	let pairAbort: AbortController | null = null;
 	let pairIgnoreErrors = false;
@@ -362,7 +365,30 @@
 		window.open(channelPath(channel), '_blank');
 	}
 
+	function openMenu() {
+		menuOpen = !menuOpen;
+	}
+
+	function closeMenu() {
+		menuOpen = false;
+	}
+
+	function onWindowPointerDown(event: PointerEvent) {
+		if (!menuOpen) return;
+		const target = event.target;
+		if (target instanceof Node && menuWrap?.contains(target)) return;
+		closeMenu();
+	}
+
+	function onWindowKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && menuOpen) {
+			event.preventDefault();
+			closeMenu();
+		}
+	}
+
 	function openReset() {
+		closeMenu();
 		resetDialog?.showModal();
 	}
 
@@ -406,9 +432,11 @@
 	<title>XChan</title>
 </svelte:head>
 
+<svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} />
+
 <main>
 	<header class="top">
-		<h1>XChan</h1>
+		<h1><span class="mark">X</span>Chan</h1>
 		<div class="top-actions">
 			<nav class="outlinks" aria-label="XChan elsewhere">
 				<a
@@ -418,7 +446,7 @@
 					rel="noreferrer"
 					aria-label="GitHub"
 				>
-					<Icon name="github" />
+					<Icon name="github" size={19} />
 				</a>
 				<a
 					class="icon"
@@ -427,10 +455,44 @@
 					rel="noreferrer"
 					aria-label="X"
 				>
-					<Icon name="x" />
+					<Icon name="x" size={17} />
 				</a>
 			</nav>
-			<button type="button" class="ghost danger" onclick={openReset}>Reset</button>
+			<div class="vdiv" aria-hidden="true"></div>
+			<div class="menu-wrap" bind:this={menuWrap}>
+				<button
+					type="button"
+					class="icon outlined"
+					aria-label="More"
+					aria-haspopup="menu"
+					aria-expanded={menuOpen}
+					onclick={openMenu}
+				>
+					<Icon name="more" size={20} />
+				</button>
+				{#if menuOpen}
+					<div class="menu" role="menu">
+						<button
+							type="button"
+							class="menu-item"
+							role="menuitemcheckbox"
+							aria-checked={themeState.theme === 'dark'}
+							onclick={toggleTheme}
+						>
+							<Icon name="moon" size={18} />
+							<span class="menu-label">Dark Theme</span>
+							<span class="switch" class:on={themeState.theme === 'dark'}
+								><span class="knob"></span></span
+							>
+						</button>
+						<div class="menu-rule"></div>
+						<button type="button" class="menu-item danger" role="menuitem" onclick={openReset}>
+							<Icon name="restart" size={18} />
+							Reset
+						</button>
+					</div>
+				{/if}
+			</div>
 		</div>
 		<p class="lede">Pair two devices and send an ephemeral secret. The server only relays.</p>
 	</header>
@@ -441,9 +503,7 @@
 		<p class="muted">Loading…</p>
 	{:else}
 		<section class="endpoint">
-			<div class="section-head">
-				<h2>This endpoint</h2>
-			</div>
+			<h2>This endpoint</h2>
 			<div class="endpoint-grid">
 				<div class="fact">
 					<span class="label">Name</span>
@@ -458,30 +518,34 @@
 								onkeydown={onNameKeydown}
 							/>
 							<button type="button" class="icon" aria-label="Save name" onclick={saveName}>
-								<Icon name="check" />
+								<Icon name="check" size={16} />
 							</button>
 							<button type="button" class="icon" aria-label="Cancel" onclick={cancelEditName}>
-								<Icon name="close" />
+								<Icon name="close" size={16} />
 							</button>
 						</div>
 					{:else}
 						<div class="display-row">
 							<span class={endpoint.name ? 'value' : 'muted'}>{endpoint.name || 'Unnamed'}</span>
 							<button type="button" class="icon" aria-label="Edit name" onclick={startEditName}>
-								<Icon name="pencil" />
+								<Icon name="pencil" size={16} />
 							</button>
 						</div>
 					{/if}
 				</div>
 				{#if pairing}
-					<button type="button" class="pair-tile cancel" onclick={() => stopPairing(true)}>
+					<button type="button" class="pair-btn cancel" onclick={() => stopPairing(true)}>
 						<span>Cancel</span>
 						<strong>{pairingSeconds}s</strong>
 					</button>
 				{:else}
-					<button type="button" class="pair-tile" onclick={startPairing}>Pair</button>
+					<button type="button" class="pair-btn" onclick={startPairing}>Pair</button>
 				{/if}
 			</div>
+			<p class="hint clock">
+				<Icon name="schedule" size={16} />
+				Press Pair on both devices within 15 seconds.
+			</p>
 			{#if pairingOffer}
 				<div class="pair-card">
 					<IdentityCard
@@ -497,120 +561,202 @@
 			{/if}
 		</section>
 
-		<section>
-			<div class="section-head">
-				<h2>Channels</h2>
-				{#if channels.length > 0}
-					<span class="muted count">{channels.length}</span>
-				{/if}
-			</div>
-			{#if channels.length === 0}
+		{#if channels.length === 0}
+			<section class="channels-empty">
+				<div class="section-head">
+					<h2>Channels</h2>
+					<span class="count">0</span>
+				</div>
 				<p class="empty">
 					No pairings yet. Open this app on another device and press Pair on both within 15 seconds.
 					Compare LifeHash and the word grid before sending.
 				</p>
-			{:else}
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th>Peer</th>
-								<th>Alias</th>
-								<th class="hide-sm">Fingerprint</th>
-								<th class="hide-md">IP</th>
-								<th><span class="sr-only">Actions</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each channels as channel (channel.peerIdentityPublicKey)}
-								<tr
-									class="channel-row"
-									onclick={(event) => onChannelRowClick(channel, event)}
-									onauxclick={(event) => onChannelRowAuxClick(channel, event)}
-								>
-									<td>
-										<div class="peer-cell">
-											<img
-												class="lifehash-thumb"
-												src={channel.peerLifeHash}
-												width="64"
-												height="64"
-												alt=""
+			</section>
+		{:else}
+			<section class="channels-desktop">
+				<div class="section-head">
+					<h2>Channels</h2>
+					<span class="count">{channels.length}</span>
+				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>Peer</th>
+							<th>Alias</th>
+							<th>Fingerprint</th>
+							<th class="hide-ip">IP</th>
+							<th><span class="sr-only">Actions</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each channels as channel (channel.peerIdentityPublicKey)}
+							<tr
+								class="channel-row"
+								onclick={(event) => onChannelRowClick(channel, event)}
+								onauxclick={(event) => onChannelRowAuxClick(channel, event)}
+							>
+								<td>
+									<div class="peer-cell">
+										<img
+											class="lifehash-thumb"
+											src={channel.peerLifeHash}
+											width="36"
+											height="36"
+											alt=""
+										/>
+										<a class="row-link" href={channelPath(channel)}
+											>{channel.peerName || 'Unnamed endpoint'}</a
+										>
+									</div>
+								</td>
+								<td>
+									{#if editingAliasKey === channel.peerIdentityPublicKey}
+										<div class="edit-row">
+											<input
+												bind:this={aliasInput}
+												type="text"
+												maxlength="64"
+												placeholder="optional"
+												bind:value={aliasDraft}
+												onkeydown={(event) => onAliasKeydown(channel, event)}
 											/>
-											<div>
-												<a class="row-link" href={channelPath(channel)}
-													>{channel.peerName || 'Unnamed endpoint'}</a
-												>
-												<div class="finger-mobile">
-													<code>{channel.peerFingerprint}</code>
-												</div>
-											</div>
+											<button
+												type="button"
+												class="icon"
+												aria-label="Save alias"
+												onclick={() => saveAlias(channel)}
+											>
+												<Icon name="check" size={16} />
+											</button>
+											<button
+												type="button"
+												class="icon"
+												aria-label="Cancel"
+												onclick={cancelEditAlias}
+											>
+												<Icon name="close" size={16} />
+											</button>
 										</div>
-									</td>
-									<td>
-										{#if editingAliasKey === channel.peerIdentityPublicKey}
-											<div class="edit-row">
-												<input
-													bind:this={aliasInput}
-													type="text"
-													maxlength="64"
-													placeholder="optional"
-													bind:value={aliasDraft}
-													onkeydown={(event) => onAliasKeydown(channel, event)}
-												/>
-												<button
-													type="button"
-													class="icon"
-													aria-label="Save alias"
-													onclick={() => saveAlias(channel)}
-												>
-													<Icon name="check" />
-												</button>
-												<button
-													type="button"
-													class="icon"
-													aria-label="Cancel"
-													onclick={cancelEditAlias}
-												>
-													<Icon name="close" />
-												</button>
-											</div>
-										{:else}
-											<div class="display-row">
-												<span class={channel.localAlias ? '' : 'muted'}
-													>{channel.localAlias || '—'}</span
-												>
-												<button
-													type="button"
-													class="icon"
-													aria-label="Edit alias for {channel.peerName || 'peer'}"
-													onclick={() => startEditAlias(channel)}
-												>
-													<Icon name="pencil" />
-												</button>
-											</div>
-										{/if}
-									</td>
-									<td class="hide-sm"><code>{channel.peerFingerprint}</code></td>
-									<td class="muted hide-md">{channel.peerIp || 'unknown'}</td>
-									<td class="actions">
+									{:else}
+										<div class="display-row">
+											<span class={channel.localAlias ? 'alias' : 'muted'}
+												>{channel.localAlias || '—'}</span
+											>
+											<button
+												type="button"
+												class="icon"
+												aria-label="Edit alias for {channel.peerName || 'peer'}"
+												onclick={() => startEditAlias(channel)}
+											>
+												<Icon name="pencil" size={15} />
+											</button>
+										</div>
+									{/if}
+								</td>
+								<td><code>{channel.peerFingerprint}</code></td>
+								<td class="ip hide-ip">{channel.peerIp || 'unknown'}</td>
+								<td class="actions">
+									<button
+										type="button"
+										class="icon danger"
+										aria-label="Delete {channel.peerName || channel.peerFingerprint}"
+										onclick={() => removeChannel(channel)}
+									>
+										<Icon name="trash" size={18} />
+									</button>
+									<Icon name="chevron-right" size={18} />
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+
+			<div class="channels-mobile">
+				<div class="section-head">
+					<h2>Channels</h2>
+					<span class="count">{channels.length}</span>
+				</div>
+				<div class="mobile-list">
+					{#each channels as channel (channel.peerIdentityPublicKey)}
+						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+						<div
+							class="mobile-card"
+							onclick={(event) => onChannelRowClick(channel, event)}
+							onauxclick={(event) => onChannelRowAuxClick(channel, event)}
+						>
+							<img
+								class="lifehash-thumb lg"
+								src={channel.peerLifeHash}
+								width="48"
+								height="48"
+								alt=""
+							/>
+							<div class="mobile-meta">
+								<div class="mobile-names">
+									<a class="row-link" href={channelPath(channel)}
+										>{channel.peerName || 'Unnamed endpoint'}</a
+									>
+									{#if editingAliasKey === channel.peerIdentityPublicKey}
+										<div class="edit-row">
+											<input
+												bind:this={aliasInput}
+												type="text"
+												maxlength="64"
+												placeholder="optional"
+												bind:value={aliasDraft}
+												onkeydown={(event) => onAliasKeydown(channel, event)}
+											/>
+											<button
+												type="button"
+												class="icon"
+												aria-label="Save alias"
+												onclick={() => saveAlias(channel)}
+											>
+												<Icon name="check" size={16} />
+											</button>
+											<button
+												type="button"
+												class="icon"
+												aria-label="Cancel"
+												onclick={cancelEditAlias}
+											>
+												<Icon name="close" size={16} />
+											</button>
+										</div>
+									{:else}
 										<button
 											type="button"
-											class="icon danger lg"
-											aria-label="Delete {channel.peerName || channel.peerFingerprint}"
-											onclick={() => removeChannel(channel)}
+											class="alias-btn"
+											aria-label="Edit alias for {channel.peerName || 'peer'}"
+											onclick={() => startEditAlias(channel)}
 										>
-											<Icon name="trash" size={36} />
+											{channel.localAlias || 'Add alias'}
 										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+									{/if}
+								</div>
+								<div class="fp-plain">{channel.peerFingerprint}</div>
+								<div class="ip">{channel.peerIp || 'unknown'}</div>
+							</div>
+							<div class="mobile-actions">
+								<button
+									type="button"
+									class="icon danger"
+									aria-label="Delete {channel.peerName || channel.peerFingerprint}"
+									onclick={() => removeChannel(channel)}
+								>
+									<Icon name="trash" size={18} />
+								</button>
+								<Icon name="chevron-right" size={20} />
+							</div>
+						</div>
+					{/each}
 				</div>
-			{/if}
-		</section>
+			</div>
+		{/if}
 	{/if}
+
+	<p class="foot">Channel keys live on this device only. Clearing site data destroys them.</p>
 </main>
 
 <dialog bind:this={resetDialog} aria-labelledby="reset-title" onclick={onResetDialogClick}>
@@ -631,94 +777,160 @@
 	.top {
 		display: grid;
 		grid-template-columns: 1fr auto;
-		column-gap: 1rem;
-		align-items: center;
-	}
-
-	.top-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-	}
-
-	.outlinks {
-		display: flex;
-		align-items: center;
-		gap: 0.1rem;
+		align-items: flex-start;
+		column-gap: 24px;
+		row-gap: 6px;
 	}
 
 	.lede {
 		grid-column: 1 / -1;
 	}
 
-	.section-head {
+	.top-actions {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.75rem;
-		margin-bottom: 0.85rem;
+		align-items: center;
+		gap: 4px;
+		flex: none;
 	}
 
-	.count {
-		font-size: 0.85rem;
+	.outlinks {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.vdiv {
+		width: 1px;
+		height: 22px;
+		background: var(--line);
+		margin: 0 6px;
+	}
+
+	.menu-wrap {
+		position: relative;
+	}
+
+	.menu {
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		width: 216px;
+		padding: 6px;
+		background: var(--menu);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow);
+		display: flex;
+		flex-direction: column;
+		z-index: 20;
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: auto;
+		padding: 9px 10px;
+		border-radius: var(--radius-inset);
+		background: transparent;
+		color: var(--ink);
+		font-size: 15px;
+		font-weight: 400;
+		justify-content: flex-start;
+		width: 100%;
+		border: 0;
+	}
+
+	.menu-item:hover:not(:disabled) {
+		filter: none;
+		background: var(--hover);
+	}
+
+	.menu-item.danger {
+		color: var(--danger);
+	}
+
+	.menu-item.danger:hover:not(:disabled) {
+		background: var(--danger-soft);
+	}
+
+	.menu-label {
+		flex: 1;
+		text-align: left;
+	}
+
+	.menu-rule {
+		height: 1px;
+		background: var(--line);
+		margin: 6px 4px;
+	}
+
+	.switch {
+		width: 34px;
+		height: 20px;
+		border-radius: var(--radius-pill);
+		flex: none;
+		display: block;
+		padding: 2px;
+		box-sizing: border-box;
+		background: var(--switch-off);
+		transition: background 160ms ease-in-out;
+	}
+
+	.switch.on {
+		background: var(--accent);
+	}
+
+	.knob {
+		width: 16px;
+		height: 16px;
+		border-radius: var(--radius-pill);
+		display: block;
+		background: #fff;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+		transform: translateX(0);
+		transition: transform 160ms ease-in-out;
+	}
+
+	.switch.on .knob {
+		transform: translateX(14px);
+	}
+
+	.endpoint {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
 	}
 
 	.endpoint-grid {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 0.75rem;
-	}
-
-	.pair-card {
-		margin-top: 0.85rem;
-	}
-
-	.peer-cell {
 		display: flex;
-		align-items: center;
-		gap: 0.7rem;
-		min-width: 0;
-	}
-
-	.lifehash-thumb {
-		width: 2.5rem;
-		height: 2.5rem;
-		flex-shrink: 0;
-		image-rendering: pixelated;
-		border-radius: 6px;
-		background: #0b0e0a;
-	}
-
-	.fact,
-	.pair-tile {
-		min-height: 4.6rem;
-		padding: 0.9rem 1rem;
-		border-radius: 12px;
-		border: 1px solid var(--line);
-		background: var(--surface-2);
-		box-sizing: border-box;
-	}
-
-	.pair-tile {
-		min-height: 3.4rem;
+		align-items: stretch;
+		gap: 16px;
 	}
 
 	.fact {
+		flex: 1;
+		min-width: 0;
+		background: var(--inset);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-inset);
+		padding: 12px 16px;
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
-		gap: 0.45rem;
+		gap: 3px;
+		box-sizing: border-box;
 	}
 
 	.value {
-		font-size: 1.02rem;
+		font-size: 18px;
+		font-weight: 500;
 	}
 
 	.display-row,
 	.edit-row {
 		display: flex;
 		flex-wrap: nowrap;
-		gap: 0.35rem;
+		gap: 8px;
 		align-items: center;
 		min-width: 0;
 	}
@@ -730,6 +942,23 @@
 		white-space: nowrap;
 	}
 
+	.display-row button.icon,
+	.edit-row button.icon,
+	.actions button.icon,
+	.mobile-actions button.icon {
+		width: 32px;
+		height: 32px;
+		min-width: 32px;
+	}
+
+	.pair-card :global(.card) {
+		background: var(--inset);
+	}
+
+	.pair-card :global(.grid) {
+		column-gap: 14px;
+	}
+
 	.edit-row {
 		flex: 1;
 	}
@@ -739,49 +968,76 @@
 		width: auto;
 		min-width: 0;
 		margin: 0;
+		padding: 6px 10px;
+		height: 32px;
 	}
 
-	.pair-tile {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.15rem;
-		background: var(--accent);
-		color: var(--accent-ink);
-		border-color: transparent;
-		font-size: 1.05rem;
-		font-weight: 750;
-		letter-spacing: -0.02em;
+	.pair-btn {
+		min-width: 168px;
+		padding: 0 32px;
+		height: auto;
+		border-radius: var(--radius-pill);
+		font-size: 16px;
+		font-weight: 500;
 	}
 
-	.pair-tile:hover {
-		filter: brightness(1.05);
-	}
-
-	.pair-tile.cancel {
+	.pair-btn.cancel {
 		background: transparent;
 		color: var(--danger);
-		border-color: var(--danger-line);
+		border: 1px solid var(--danger);
+		flex-direction: column;
+		gap: 2px;
+		height: auto;
+		min-height: 48px;
 	}
 
-	.pair-tile.cancel strong {
+	.pair-btn.cancel:hover:not(:disabled) {
+		filter: none;
+		background: var(--danger-soft);
+	}
+
+	.pair-btn.cancel strong {
 		font-variant-numeric: tabular-nums;
-		font-size: 1.15rem;
+		font-size: 15px;
+		font-weight: 500;
+	}
+
+	.clock {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.pair-card {
+		margin-top: 0;
 	}
 
 	.note {
-		margin: 0.85rem 0 0;
+		margin: 0;
+	}
+
+	.section-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-bottom: 16px;
+	}
+
+	.count {
+		font-family: var(--mono);
+		font-size: 13px;
+		color: var(--ink3);
 	}
 
 	.empty {
 		margin: 0;
-		color: var(--muted);
+		color: var(--ink2);
+		font-size: 15px;
+		line-height: 22px;
 	}
 
-	.table-wrap {
-		overflow-x: auto;
-		margin: 0 -0.25rem;
+	.channels-desktop {
+		padding: 20px 24px 8px;
 	}
 
 	table {
@@ -793,20 +1049,17 @@
 	td {
 		text-align: left;
 		vertical-align: middle;
-		padding: 0.8rem 0.6rem;
+		padding: 14px 8px;
 		border-bottom: 1px solid var(--line);
 	}
 
 	th {
-		font-size: 0.7rem;
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--faint);
-		font-weight: 650;
-	}
-
-	td code {
-		white-space: nowrap;
+		color: var(--ink3);
+		padding: 0 8px 10px;
 	}
 
 	tbody tr:last-child td {
@@ -818,64 +1071,188 @@
 	}
 
 	.channel-row:hover td {
-		background: rgba(16, 21, 14, 0.65);
+		background: var(--hover);
+	}
+
+	.peer-cell {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-width: 0;
+	}
+
+	.lifehash-thumb {
+		width: 36px;
+		height: 36px;
+		flex-shrink: 0;
+		image-rendering: pixelated;
+		border-radius: var(--radius-inset);
+		background: var(--inset);
+	}
+
+	.lifehash-thumb.lg {
+		width: 48px;
+		height: 48px;
+	}
+
+	.row-link {
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--ink);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.row-link:hover {
+		color: var(--ink);
+		text-decoration: none;
+	}
+
+	.alias {
+		font-size: 15px;
+		color: var(--ink2);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ip {
+		font-family: var(--mono);
+		font-size: 13px;
+		color: var(--ink3);
 	}
 
 	.actions {
-		width: 1%;
-		text-align: right;
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 6px;
+		color: var(--ink3);
 	}
 
-	.finger-mobile {
+	.channels-mobile {
 		display: none;
-		margin-top: 0.25rem;
 	}
 
-	@media (min-width: 480px) {
-		.endpoint-grid {
-			grid-template-columns: 1fr minmax(8.75rem, 10.5rem);
-		}
-
-		.pair-tile {
-			min-height: 3.4rem;
-			flex-direction: row;
-			gap: 0.65rem;
-		}
+	.mobile-list {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
 	}
 
-	@media (min-width: 800px) {
-		.endpoint-grid {
-			grid-template-columns: 1fr minmax(8.75rem, 10.5rem);
-		}
-
-		.fact,
-		.pair-tile {
-			min-height: 5.5rem;
-		}
-
-		.pair-tile {
-			grid-column: auto;
-			flex-direction: column;
-		}
+	.mobile-card {
+		background: var(--card);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		padding: 14px;
+		display: flex;
+		gap: 14px;
+		align-items: center;
+		cursor: pointer;
 	}
 
-	@media (max-width: 799px) {
-		.hide-md {
+	.mobile-meta {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
+
+	.mobile-names {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	.alias-btn {
+		height: auto;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		border-radius: 0;
+		color: var(--ink3);
+		font-size: 14px;
+		font-weight: 400;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
+
+	.alias-btn:hover:not(:disabled) {
+		filter: none;
+		color: var(--ink);
+	}
+
+	.fp-plain {
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--ink2);
+	}
+
+	.mobile-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		color: var(--ink3);
+		flex: none;
+	}
+
+	@media (max-width: 900px) {
+		.hide-ip {
 			display: none;
 		}
 	}
 
-	@media (max-width: 639px) {
-		.hide-sm {
-			display: none;
-		}
-
-		.finger-mobile {
-			display: block;
+	@media (max-width: 720px) {
+		.top {
+			align-items: center;
+			column-gap: 12px;
 		}
 
 		.lede {
-			font-size: 0.92rem;
+			margin-top: 0;
+		}
+
+		.vdiv {
+			display: none;
+		}
+
+		.endpoint-grid {
+			flex-direction: column;
+			gap: 14px;
+		}
+
+		.fact {
+			padding: 11px 14px;
+		}
+
+		.value {
+			font-size: 17px;
+		}
+
+		.pair-btn {
+			min-width: 0;
+			width: 100%;
+			height: 48px;
+			padding: 0;
+		}
+
+		.channels-desktop {
+			display: none;
+		}
+
+		.channels-mobile {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.section-head {
+			padding-bottom: 0;
 		}
 	}
 </style>
