@@ -23,6 +23,7 @@
 
 	let endpoint = $state<Endpoint | null>(null);
 	let channels = $state<Channel[]>([]);
+	let selfIp = $state('');
 	let loadError = $state('');
 	let pairing = $state(false);
 	let pairingSeconds = $state(PAIRING_SECONDS);
@@ -56,10 +57,24 @@
 				loadError = err instanceof Error ? err.message : 'Could not load this device';
 			}
 		})();
+		void loadSelfIp();
 		return () => {
 			stopPairing(false);
 		};
 	});
+
+	async function loadSelfIp() {
+		try {
+			const response = await fetch('/api/ip', {
+				headers: { Accept: 'application/json' }
+			});
+			if (!response.ok) return;
+			const body = (await response.json()) as { ip?: unknown };
+			if (typeof body.ip === 'string') selfIp = body.ip.trim();
+		} catch {
+			// Leave unknown if the relay cannot report an address.
+		}
+	}
 
 	async function startEditName() {
 		if (!endpoint) return;
@@ -533,6 +548,12 @@
 						</div>
 					{/if}
 				</div>
+				<div class="fact">
+					<span class="label">IP</span>
+					<span class={selfIp ? 'value endpoint-ip' : 'muted'} title={selfIp || undefined}
+						>{selfIp || 'unknown'}</span
+					>
+				</div>
 				{#if pairing}
 					<button type="button" class="pair-btn cancel" onclick={() => stopPairing(true)}>
 						<span>Cancel</span>
@@ -924,6 +945,15 @@
 	.value {
 		font-size: 18px;
 		font-weight: 500;
+	}
+
+	.endpoint-ip {
+		font-family: var(--mono);
+		font-size: 16px;
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.display-row,
