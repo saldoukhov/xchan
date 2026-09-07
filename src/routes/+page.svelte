@@ -28,7 +28,8 @@
 
 	let resetDialog = $state<HTMLDialogElement | undefined>(undefined);
 
-	let pairSource: EventSource | null = null;
+	let pairAbort: AbortController | null = null;
+	let pairIgnoreErrors = false;
 	let pairTimer: ReturnType<typeof setInterval> | null = null;
 
 	onMount(() => {
@@ -92,11 +93,10 @@
 			clearInterval(pairTimer);
 			pairTimer = null;
 		}
-		if (pairSource) {
-			pairSource.onerror = null;
-			pairSource.onmessage = null;
-			pairSource.close();
-			pairSource = null;
+		pairIgnoreErrors = true;
+		if (pairAbort) {
+			pairAbort.abort();
+			pairAbort = null;
 		}
 	}
 
@@ -131,39 +131,90 @@
 		}
 	}
 
-	function startPairing() {
+	async function startPairing() {
 		if (!endpoint || pairing) return;
 		pairingNote = '';
 		pairing = true;
 		pairingSeconds = 30;
+		pairIgnoreErrors = false;
+		const controller = new AbortController();
+		pairAbort = controller;
 		const url = `/api/pair/events?publicKey=${encodeURIComponent(endpoint.publicKey)}&name=${encodeURIComponent(endpoint.name)}`;
-		pairSource = new EventSource(url);
 		pairTimer = setInterval(() => {
 			pairingSeconds = Math.max(0, pairingSeconds - 1);
 		}, 1000);
-		pairSource.onmessage = (event) => {
-			const payload = JSON.parse(event.data) as PairEvent;
-			if (payload.type === 'waiting') return;
-			if (payload.type === 'timeout') {
+		try {
+			const response = await fetch(url, {
+				headers: { Accept: 'text/event-stream' },
+				signal: controller.signal
+			});
+			if (!response.ok) {
+				const text = (await response.text()).trim();
 				stopPairing(false);
-				pairingNote = 'Pairing timed out. Try again with both devices.';
+				pairingNote = text || 'Could not start pairing.';
 				return;
 			}
-			if (payload.type === 'cancelled') {
+			if (!response.body) {
 				stopPairing(false);
+				pairingNote = 'Pairing connection dropped.';
 				return;
 			}
-			if (payload.type === 'paired') {
-				pairingNote = '';
-				closePairSource();
-				void finishPairing(payload);
+			await readPairEvents(response.body, controller.signal, (payload) => {
+				if (payload.type === 'waiting') return;
+				if (payload.type === 'timeout') {
+					stopPairing(false);
+					pairingNote = 'Pairing timed out. Try again with both devices.';
+					return;
+				}
+				if (payload.type === 'cancelled') {
+					stopPairing(false);
+					return;
+				}
+				if (payload.type === 'paired') {
+					pairingNote = '';
+					closePairSource();
+					void finishPairing(payload);
+				}
+			});
+			if (!pairIgnoreErrors && pairing) {
+				stopPairing(false);
+				pairingNote = 'Pairing connection dropped.';
 			}
-		};
-		pairSource.onerror = () => {
+		} catch (err) {
+			if (pairIgnoreErrors) return;
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			if (!pairing) return;
 			stopPairing(false);
 			pairingNote = 'Pairing connection dropped.';
-		};
+		}
+	}
+
+	async function readPairEvents(
+		body: ReadableStream<Uint8Array>,
+		signal: AbortSignal,
+		onEvent: (payload: PairEvent) => void
+	) {
+		const reader = body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+		try {
+			while (!signal.aborted) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				const chunks = buffer.split('\n\n');
+				buffer = chunks.pop() ?? '';
+				for (const chunk of chunks) {
+					for (const line of chunk.split('\n')) {
+						if (!line.startsWith('data:')) continue;
+						const json = line.slice(5).trim();
+						if (json) onEvent(JSON.parse(json) as PairEvent);
+					}
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
 	}
 
 	async function removeChannel(channel: Channel) {

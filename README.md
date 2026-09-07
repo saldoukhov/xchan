@@ -66,5 +66,4 @@ Then generate a public domain in the service settings.
 ## Security notes
 
 - The relay can see ciphertext and metadata (public keys, IPs, names), not plaintext.
-- Anyone who can reach your instance can enter the pairing queue.
-- v1 does not rate-limit pairing.
+- Anyone who can reach your instance can enter the pairing queue, subject to in-memory IP throttles (joins and successful matches), two concurrent waiters per IP, and a global queue cap. Limits reset when the process restarts.
