@@ -18,9 +18,27 @@
 	import { listChannels, putChannel } from '$lib/db';
 	import Icon from '$lib/Icon.svelte';
 	import IdentityCard from '$lib/IdentityCard.svelte';
+	import {
+		FileAssembler,
+		MAX_FILE_BYTES,
+		PayloadTooLargeError,
+		attachLocalFile,
+		chunkCount,
+		decodePayload,
+		encodePayload,
+		fileBlob,
+		formatBytes,
+		isPreviewableImage,
+		newTransferId,
+		readFileChunk,
+		type AttachedFile,
+		type FilePayload,
+		type TextPayload
+	} from '$lib/payload';
 	import type { Channel, ChannelEvent, Endpoint } from '$lib/types';
 
 	const MAX_MESSAGE_CHARS = 512;
+	const TRANSFER_STALL_MS = 60_000;
 
 	let endpoint = $state<Endpoint | null>(null);
 	let channel = $state<Channel | null>(null);
@@ -28,30 +46,76 @@
 	let missing = $state(false);
 	let peerReady = $state(false);
 	let draft = $state('');
-	let lastReceived = $state('');
+	let attached = $state<AttachedFile | null>(null);
+	let lastReceived = $state<TextPayload | FilePayload | null>(null);
+	let incoming = $state<{ name: string; received: number; size: number } | null>(null);
 	let receivedAt = $state<Date | null>(null);
+	let previewUrl = $state('');
 	let sendNote = $state('');
 	let sending = $state(false);
+	let sendProgress = $state(0);
 	let copied = $state(false);
 	let sent = $state(false);
 	let compareOpen = $state(false);
+	let draggingFile = $state(false);
+	let canRevealFolder = $state(false);
+	let fileInput = $state<HTMLInputElement | undefined>(undefined);
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 	let sentTimer: ReturnType<typeof setTimeout> | null = null;
+	let stallTimer: ReturnType<typeof setTimeout> | null = null;
+	let sendAbort: AbortController | null = null;
+	const assembler = new FileAssembler();
 
 	const slug = $derived(page.params.slug ?? '');
 	const title = $derived(channel ? `XChan · ${channelLabel(channel)}` : 'XChan');
 	const heading = $derived(channel ? channelTitle(channel) : '');
 	const peerName = $derived(channel ? channelPeerName(channel) : '');
 	const draftCount = $derived(draft.length);
-	const canSend = $derived(peerReady && draft.length > 0 && !sending);
+	const canSend = $derived(peerReady && !sending && (attached !== null || draft.length > 0));
 	const receivedClock = $derived(receivedAt ? formatClock(receivedAt) : '');
+	const receivedText = $derived(lastReceived?.kind === 'text' ? lastReceived.text : '');
+	const receivedFile = $derived(lastReceived?.kind === 'file' ? lastReceived : null);
 
 	onMount(() => {
+		canRevealFolder = typeof window.showDirectoryPicker === 'function';
 		return () => {
 			if (copyTimer) clearTimeout(copyTimer);
 			if (sentTimer) clearTimeout(sentTimer);
+			clearStall();
+			sendAbort?.abort();
+			revokePreview();
 		};
 	});
+
+	function revokePreview() {
+		if (previewUrl) {
+			URL.revokeObjectURL(previewUrl);
+			previewUrl = '';
+		}
+	}
+
+	function clearStall() {
+		if (stallTimer) {
+			clearTimeout(stallTimer);
+			stallTimer = null;
+		}
+	}
+
+	function bumpStall() {
+		clearStall();
+		stallTimer = setTimeout(() => {
+			assembler.reset();
+			incoming = null;
+			sendNote = 'File transfer timed out.';
+			stallTimer = null;
+		}, TRANSFER_STALL_MS);
+	}
+
+	function resetIncoming() {
+		clearStall();
+		assembler.reset();
+		incoming = null;
+	}
 
 	function formatClock(date: Date) {
 		return date.toLocaleTimeString(undefined, {
@@ -95,14 +159,22 @@
 			peerReady = false;
 			return;
 		}
-		lastReceived = '';
+		lastReceived = null;
+		incoming = null;
 		receivedAt = null;
 		sendNote = '';
 		peerReady = false;
 		draft = '';
+		attached = null;
 		copied = false;
 		sent = false;
+		sendProgress = 0;
 		compareOpen = false;
+		draggingFile = false;
+		assembler.reset();
+		clearStall();
+		sendAbort?.abort();
+		revokePreview();
 		let cancelled = false;
 		let es: EventSource | null = null;
 		void (async () => {
@@ -124,7 +196,10 @@
 				const payload = JSON.parse(event.data) as ChannelEvent;
 				if (payload.type === 'status') {
 					peerReady = payload.ready;
-					if (!payload.ready) return;
+					if (!payload.ready) {
+						resetIncoming();
+						return;
+					}
 					const current = channel;
 					if (!current) return;
 					let peerName = current.peerName;
@@ -151,11 +226,42 @@
 				if (payload.type === 'message') {
 					try {
 						const plain = await decrypt(base64ToBytes(payload.ciphertext), privateKey);
-						lastReceived = new TextDecoder().decode(plain);
+						const decoded = decodePayload(plain);
+						if (decoded.kind === 'file-chunk') {
+							incoming = {
+								name: decoded.name,
+								received: 0,
+								size: decoded.fileSize
+							};
+							const complete = assembler.add(decoded);
+							incoming = {
+								name: decoded.name,
+								received: complete ? decoded.fileSize : assembler.receivedBytes,
+								size: decoded.fileSize
+							};
+							bumpStall();
+							if (complete) {
+								clearStall();
+								incoming = null;
+								acceptReceivedFile(complete);
+							}
+							return;
+						}
+						resetIncoming();
+						if (decoded.kind === 'file') {
+							acceptReceivedFile(decoded);
+							return;
+						}
+						revokePreview();
+						lastReceived = decoded;
 						receivedAt = new Date();
 						sendNote = '';
-					} catch {
-						sendNote = 'Received a message that could not be decrypted.';
+					} catch (err) {
+						resetIncoming();
+						sendNote =
+							err instanceof PayloadTooLargeError
+								? err.message
+								: 'Received a message that could not be read.';
 					}
 				}
 			};
@@ -169,53 +275,139 @@
 		};
 	});
 
+	async function postCiphertext(ciphertext: Uint8Array, signal: AbortSignal) {
+		if (!channel) throw new Error('no channel');
+		const res = await fetch('/api/channel/send', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				from: channel.localPublicKey,
+				to: channel.peerPublicKey,
+				ciphertext: bytesToBase64(ciphertext)
+			}),
+			signal
+		});
+		if (res.status === 409) {
+			peerReady = false;
+			throw new Error('peer is not ready');
+		}
+		if (res.status === 413) {
+			throw new PayloadTooLargeError();
+		}
+		if (!res.ok) throw new Error('send failed');
+	}
+
+	async function sendFile(file: AttachedFile, peerKey: Uint8Array, signal: AbortSignal) {
+		const total = chunkCount(file.size);
+		const id = newTransferId();
+		sendProgress = 0;
+		for (let index = 0; index < total; index += 1) {
+			if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+			const bytes = await readFileChunk(file.file, index);
+			const ciphertext = await encrypt(
+				encodePayload({
+					kind: 'file-chunk',
+					id,
+					index,
+					total,
+					fileSize: file.size,
+					name: file.name,
+					type: file.type,
+					bytes
+				}),
+				peerKey
+			);
+			await postCiphertext(ciphertext, signal);
+			sendProgress = (index + 1) / total;
+		}
+	}
+
 	async function sendMessage() {
 		if (!channel || !peerReady || sending) return;
-		const text = draft.slice(0, MAX_MESSAGE_CHARS);
-		if (!text) return;
+		const file = attached;
+		const text = file ? '' : draft.slice(0, MAX_MESSAGE_CHARS);
+		if (!file && !text) return;
 		sending = true;
 		sendNote = '';
+		sendProgress = 0;
+		const abort = new AbortController();
+		sendAbort = abort;
 		try {
-			const ciphertext = await encrypt(
-				new TextEncoder().encode(text),
-				base64ToBytes(channel.peerPublicKey)
-			);
-			const res = await fetch('/api/channel/send', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					from: channel.localPublicKey,
-					to: channel.peerPublicKey,
-					ciphertext: bytesToBase64(ciphertext)
-				})
-			});
-			if (res.status === 409) {
-				sendNote = 'Peer is not ready.';
-				peerReady = false;
-				return;
+			const peerKey = base64ToBytes(channel.peerPublicKey);
+			if (file) {
+				await sendFile(file, peerKey, abort.signal);
+				attached = null;
+			} else {
+				await postCiphertext(
+					await encrypt(encodePayload({ kind: 'text', text }), peerKey),
+					abort.signal
+				);
+				draft = '';
 			}
-			if (!res.ok) {
-				sendNote = 'Send failed.';
-				return;
-			}
-			draft = '';
 			sent = true;
 			if (sentTimer) clearTimeout(sentTimer);
 			sentTimer = setTimeout(() => {
 				sent = false;
 				sentTimer = null;
 			}, 1500);
-		} catch {
-			sendNote = 'Send failed.';
+		} catch (err) {
+			if (abort.signal.aborted) return;
+			if (err instanceof PayloadTooLargeError) {
+				sendNote = err.message;
+			} else if (err instanceof Error && err.message === 'peer is not ready') {
+				sendNote = 'Peer is not ready.';
+			} else {
+				sendNote = 'Send failed.';
+			}
 		} finally {
+			if (sendAbort === abort) sendAbort = null;
 			sending = false;
+			sendProgress = 0;
 		}
 	}
 
-	async function copyReceived() {
-		if (!lastReceived) return;
+	function attachFile(file: File) {
+		sendNote = '';
 		try {
-			await navigator.clipboard.writeText(lastReceived);
+			attached = attachLocalFile(file);
+		} catch (err) {
+			attached = null;
+			sendNote = err instanceof PayloadTooLargeError ? err.message : 'Could not read that file.';
+		}
+	}
+
+	function onFileInput(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) void attachFile(file);
+	}
+
+	function onSendDragOver(event: DragEvent) {
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+		draggingFile = true;
+	}
+
+	function onSendDragLeave(event: DragEvent) {
+		const next = event.relatedTarget as Node | null;
+		if (next && event.currentTarget instanceof Node && event.currentTarget.contains(next)) {
+			return;
+		}
+		draggingFile = false;
+	}
+
+	function onSendDrop(event: DragEvent) {
+		event.preventDefault();
+		draggingFile = false;
+		const file = event.dataTransfer?.files[0];
+		if (file) void attachFile(file);
+	}
+
+	async function copyReceived() {
+		if (!receivedText) return;
+		try {
+			await navigator.clipboard.writeText(receivedText);
 			copied = true;
 			if (copyTimer) clearTimeout(copyTimer);
 			copyTimer = setTimeout(() => {
@@ -224,6 +416,39 @@
 			}, 1500);
 		} catch {
 			sendNote = 'Copy failed.';
+		}
+	}
+
+	function acceptReceivedFile(file: FilePayload) {
+		revokePreview();
+		if (isPreviewableImage(file.type)) {
+			previewUrl = URL.createObjectURL(fileBlob(file));
+		}
+		lastReceived = file;
+		receivedAt = new Date();
+		sendNote = '';
+		triggerDownload(file);
+	}
+
+	function triggerDownload(file: FilePayload) {
+		const url = URL.createObjectURL(fileBlob(file));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = file.name;
+		link.rel = 'noopener';
+		document.body.append(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 60_000);
+	}
+
+	async function showInFolder() {
+		const picker = window.showDirectoryPicker;
+		if (typeof picker !== 'function') return;
+		try {
+			await picker.call(window, { startIn: 'downloads' });
+		} catch {
+			// Picker cancelled or the downloads folder is not available.
 		}
 	}
 
@@ -339,32 +564,97 @@
 		</section>
 
 		<div class="panels">
-			<section class="pane">
+			<section
+				class="pane"
+				class:is-drop={draggingFile}
+				role="group"
+				aria-label="Send"
+				ondragover={onSendDragOver}
+				ondragenter={onSendDragOver}
+				ondragleave={onSendDragLeave}
+				ondrop={onSendDrop}
+			>
 				<span class="kicker">Send</span>
-				<textarea
-					spellcheck="false"
-					autocomplete="off"
-					placeholder="Type or paste a short secret"
-					maxlength={MAX_MESSAGE_CHARS}
-					value={draft}
-					oninput={onDraftInput}
-					onkeydown={(event) => {
-						if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-							event.preventDefault();
-							void sendMessage();
-						}
-					}}></textarea>
+				<input bind:this={fileInput} class="sr-only" type="file" onchange={onFileInput} />
+				{#if attached}
+					<div class="file-chip">
+						<Icon name="file" size={18} />
+						<div class="file-meta">
+							<span class="file-name">{attached.name}</span>
+							<span class="count">
+								{#if sending}
+									{formatBytes(Math.round(sendProgress * attached.size))} / {formatBytes(
+										attached.size
+									)}
+								{:else}
+									{formatBytes(attached.size)}
+								{/if}
+							</span>
+						</div>
+						<button
+							type="button"
+							class="icon"
+							aria-label="Remove file"
+							disabled={sending}
+							onclick={() => (attached = null)}
+						>
+							<Icon name="close" size={16} />
+						</button>
+					</div>
+					{#if sending}
+						<div
+							class="progress"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={Math.round(sendProgress * 100)}
+						>
+							<span style="width: {Math.max(sendProgress * 100, 2)}%"></span>
+						</div>
+					{/if}
+				{:else}
+					<textarea
+						spellcheck="false"
+						autocomplete="off"
+						placeholder="Type or paste a short secret, or attach a file"
+						maxlength={MAX_MESSAGE_CHARS}
+						value={draft}
+						oninput={onDraftInput}
+						onkeydown={(event) => {
+							if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+								event.preventDefault();
+								void sendMessage();
+							}
+						}}></textarea>
+				{/if}
 				<div class="pane-foot">
-					<span class="count">{draftCount} / {MAX_MESSAGE_CHARS}</span>
-					<button
-						type="button"
-						class={peerReady || sent ? '' : 'quiet'}
-						disabled={!canSend}
-						onclick={sendMessage}
-					>
-						<Icon name={sent ? 'check' : 'send'} size={18} />
-						{sent ? 'Sent' : 'Send'}
-					</button>
+					<span class="count">
+						{#if attached}
+							{formatBytes(attached.size)} / {formatBytes(MAX_FILE_BYTES)}
+						{:else}
+							{draftCount} / {MAX_MESSAGE_CHARS}
+						{/if}
+					</span>
+					<div class="send-actions">
+						<button
+							type="button"
+							class="icon outlined"
+							aria-label="Attach a file"
+							disabled={sending}
+							onclick={() => fileInput?.click()}
+						>
+							<Icon name="attach" size={18} />
+						</button>
+						<button
+							type="button"
+							class={peerReady || sent ? '' : 'quiet'}
+							disabled={!canSend}
+							onclick={sendMessage}
+						>
+							<Icon name={sent ? 'check' : 'send'} size={18} />
+							{sent ? 'Sent' : 'Send'}
+						</button>
+					</div>
 				</div>
 				{#if sendNote}
 					<p class="error send-error">{sendNote}</p>
@@ -382,23 +672,71 @@
 						<span class="count">{receivedClock}</span>
 					{/if}
 				</div>
-				<div class="received-body" aria-readonly="true">
-					{#if lastReceived}
-						<pre>{lastReceived}</pre>
+				<div
+					class="received-body"
+					class:has-file={Boolean(receivedFile || incoming)}
+					aria-readonly="true"
+				>
+					{#if incoming}
+						<div class="file-chip received-file">
+							<Icon name="file" size={18} />
+							<div class="file-meta">
+								<span class="file-name">{incoming.name}</span>
+								<span class="count"
+									>{formatBytes(incoming.received)} / {formatBytes(incoming.size)}</span
+								>
+							</div>
+						</div>
+						<div
+							class="progress"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={incoming.size
+								? Math.round((incoming.received / incoming.size) * 100)
+								: 0}
+						>
+							<span
+								style="width: {incoming.size
+									? Math.max((incoming.received / incoming.size) * 100, 2)
+									: 2}%"
+							></span>
+						</div>
+					{:else if receivedFile}
+						{#if previewUrl}
+							<img class="file-preview" src={previewUrl} alt="" />
+						{/if}
+						<div class="file-chip received-file">
+							<Icon name="file" size={18} />
+							<div class="file-meta">
+								<span class="file-name">{receivedFile.name}</span>
+								<span class="count">{formatBytes(receivedFile.bytes.byteLength)}</span>
+							</div>
+						</div>
+					{:else if receivedText}
+						<pre>{receivedText}</pre>
 					{/if}
 				</div>
 				<div class="pane-foot">
 					<span class="hint">Cleared when you leave.</span>
-					<button
-						type="button"
-						class="ghost"
-						onclick={copyReceived}
-						disabled={!lastReceived}
-						aria-label={copied ? 'Copied' : 'Copy received message'}
-					>
-						<Icon name={copied ? 'check' : 'copy'} size={18} />
-						{copied ? 'Copied' : 'Copy'}
-					</button>
+					{#if receivedFile}
+						{#if canRevealFolder}
+							<button type="button" class="compare-btn" onclick={showInFolder}>
+								Show in folder
+							</button>
+						{/if}
+					{:else if !incoming}
+						<button
+							type="button"
+							class="ghost"
+							onclick={copyReceived}
+							disabled={!receivedText}
+							aria-label={copied ? 'Copied' : 'Copy received message'}
+						>
+							<Icon name={copied ? 'check' : 'copy'} size={18} />
+							{copied ? 'Copied' : 'Copy'}
+						</button>
+					{/if}
 				</div>
 			</section>
 		</div>
@@ -583,7 +921,8 @@
 	}
 
 	.pane textarea,
-	.received-body {
+	.received-body,
+	.file-chip {
 		height: 120px;
 		margin: 0;
 		padding: 12px 14px;
@@ -593,11 +932,88 @@
 		box-sizing: border-box;
 	}
 
+	.pane.is-drop {
+		outline: 2px dashed var(--accent);
+		outline-offset: 2px;
+	}
+
+	.file-chip {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		height: 120px;
+		color: var(--ink);
+	}
+
+	.file-chip.received-file {
+		height: auto;
+		min-height: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		flex: none;
+	}
+
+	.file-meta {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.file-name {
+		font-size: 15px;
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.file-preview {
+		max-width: 100%;
+		max-height: 140px;
+		object-fit: contain;
+		border-radius: var(--radius-inset);
+		background: var(--chip);
+	}
+
+	.send-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: none;
+	}
+
+	.progress {
+		height: 4px;
+		border-radius: var(--radius-pill);
+		background: var(--line);
+		overflow: hidden;
+		flex: none;
+	}
+
+	.progress span {
+		display: block;
+		height: 100%;
+		background: var(--accent);
+	}
+
 	.received-body {
 		overflow: auto;
 		color: var(--ink);
 		cursor: default;
 		user-select: text;
+	}
+
+	.received-body.has-file {
+		height: auto;
+		min-height: 120px;
+		max-height: 240px;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 12px;
 	}
 
 	.received-body pre {
@@ -729,7 +1145,8 @@
 			gap: 12px;
 		}
 
-		.pane textarea {
+		.pane textarea,
+		.file-chip {
 			height: 92px;
 		}
 
@@ -737,9 +1154,17 @@
 			display: none;
 		}
 
-		.pane-foot button {
+		.pane-foot button:not(.icon):not(.compare-btn) {
 			width: 100%;
 			height: 48px;
+		}
+
+		.send-actions {
+			width: 100%;
+		}
+
+		.send-actions button:not(.icon) {
+			flex: 1;
 		}
 
 		.pane:first-child .pane-foot {

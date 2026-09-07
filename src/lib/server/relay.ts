@@ -1,4 +1,5 @@
 import { commitOfPairing } from '$lib/crypto/hash';
+import { MAX_CIPHERTEXT_BYTES } from '$lib/payload';
 import { PAIRING_MS } from '$lib/pairing';
 import {
 	MAX_CONCURRENT_PER_IP,
@@ -9,8 +10,7 @@ import {
 } from './pair-limit';
 import type { SseSink } from './sse';
 
-export { PAIRING_MS };
-export const MAX_CIPHERTEXT_BYTES = 64 * 1024;
+export { PAIRING_MS, MAX_CIPHERTEXT_BYTES };
 
 export type PairingAdmission =
 	{ ok: true } | { ok: false; status: 429 | 503; retryAfterSec: number; message: string };

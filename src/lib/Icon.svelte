@@ -1,10 +1,13 @@
 <script lang="ts">
 	type Name =
+		| 'attach'
 		| 'back'
 		| 'check'
 		| 'chevron-right'
 		| 'close'
 		| 'copy'
+		| 'download'
+		| 'file'
 		| 'github'
 		| 'moon'
 		| 'more'
@@ -35,6 +38,17 @@
 	{#if name === 'back'}
 		<path d="M19 12H5" />
 		<path d="m12 19-7-7 7-7" />
+	{:else if name === 'attach'}
+		<path
+			d="m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486"
+		/>
+	{:else if name === 'download'}
+		<path d="M12 15V3" />
+		<path d="m7 10 5 5 5-5" />
+		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+	{:else if name === 'file'}
+		<path d="M14 2v6h6" />
+		<path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2Z" />
 	{:else if name === 'pencil'}
 		<path
 			d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"

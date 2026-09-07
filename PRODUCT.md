@@ -6,7 +6,7 @@
 ## Who it is for
 
 - Primary user: anybody
-- What they are trying to do: send an ephemeral secret message between two devices
+- What they are trying to do: send an ephemeral secret (text or a file) between two devices
 - First useful thing they can complete in the app: send a password from already authenteticated computer to a new machine they are setting up.
 
 ## Shape
@@ -49,7 +49,8 @@ What ships in the first runnable version (bullet list):
 - Server throttles pairing in memory: per-IP join window, per-IP successful-match window, at most two concurrent waiters per IP, and a global queue cap. Exhausted match budget rejects further joins (does not enqueue). IPv6 is keyed by /64. Unknown IPs share a stricter bucket. Limits reset when the process restarts.
 - In the channel list, the user sees LifeHash thumbnails, the first three fingerprint words, ip addresses and endpoint names. User can also add own partner endpoint name, in which case they will see both. The channel page shows both Us and Them identity cards (LifeHash + 24-word grid).
 - When a channel is selected for sending, device is listening to SSE from the server. As such, to send information both devices should be in ready to send mode. When a channel is selected for sending, the user should see the other party status. At other times, there is no SSE, so it is unknown when your channels come ready to send. The endpoint name is ECIES-encrypted to the peer pairing public key on that SSE join; the server relays ciphertext only. When both ends are ready, the server includes each side’s connection IP in the status event; each client stores both IPs on the channel.
-- Information sent to another party (messages and endpoint names) is encrypted with the other party public key using ecies encyption schema. For the reference, see Keeper Secrets Manager JS SDK.
+- User can send a short text secret (up to 512 characters) or a file up to 50 MiB (photos, short videos). Files are split into ECIES-encrypted chunks and relayed over SSE like text; the server does not store chunks. Each relayed ciphertext is capped at 1 MiB. The receiver saves the file automatically and can preview common raster images. A Show in folder link is offered when the browser can open a downloads-folder picker. Text and files are shown only while the channel page is open.
+- Information sent to another party (messages, files, and endpoint names) is encrypted with the other party public key using ecies encyption schema. For the reference, see Keeper Secrets Manager JS SDK.
 - Server does not store any information, it is just a relay between parties.
 
 ## Non-goals

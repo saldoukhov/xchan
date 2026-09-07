@@ -510,7 +510,9 @@
 				{/if}
 			</div>
 		</div>
-		<p class="lede">Pair two devices and send an ephemeral secret. The server only relays.</p>
+		<p class="lede">
+			Pair two devices and send an ephemeral secret or file. The server only relays.
+		</p>
 	</header>
 
 	{#if loadError}

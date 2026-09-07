@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { base64ToBytes, isUncompressedP256 } from '$lib/crypto/bytes';
 import { isSha256Commit } from '$lib/crypto/hash';
-import { MAX_CIPHERTEXT_BYTES } from './relay';
+import { MAX_CIPHERTEXT_BYTES } from '$lib/payload';
 
 export function parsePublicKey(value: string | null): string {
 	if (!value) {

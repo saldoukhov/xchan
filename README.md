@@ -1,19 +1,19 @@
 # XChan
 
-Web app for pairing two devices and sending an ephemeral secret (for example a password from a computer you already have to a machine you are setting up).
+Web app for pairing two devices and sending an ephemeral secret — a password, a short note, or a small file — from a computer you already have to a machine you are setting up.
 
 **Live at [xchan.dev](https://xchan.dev).** It is a PWA — install it from the browser on each device.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/xchan)
 
-Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(pairing public key || identity public key)` first, then reveal the keys after a FIFO match. Messages and endpoint names are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages.
+Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(pairing public key || identity public key)` first, then reveal the keys after a FIFO match. Messages, files, and endpoint names are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages. Files up to 50 MiB are sent as encrypted chunks; each relayed ciphertext is capped at 1 MiB.
 
 ## How it works
 
 1. Optionally name this endpoint (`MacBook`, `Pixel`, …).
 2. On both devices, press **Pair** within 15 seconds. The server matches commits FIFO; devices then reveal public keys and check them against the commits.
 3. While pairing, compare **Us** on one screen with **Them** on the other: LifeHash picture plus the 24-word grid.
-4. A channel appears. The list shows a LifeHash thumbnail and the first three words. Select the channel on both devices; when status is **ready**, send a short secret.
+4. A channel appears. The list shows a LifeHash thumbnail and the first three words. Select the channel on both devices; when status is **ready**, send a short secret or attach a file (up to 50 MB). The other device saves the file automatically.
 
 If the cards do not match, delete the channel and pair again.
 
@@ -62,6 +62,6 @@ Then generate a public domain in the service settings.
 
 ## Security notes
 
-- The relay can see ciphertext, pairing commits, public keys after reveal, and IPs — not names or message plaintext.
+- The relay can see ciphertext, pairing commits, public keys after reveal, and IPs — not names, message plaintext, or file contents.
 - Compare LifeHash and the 24-word grid across both devices before sending. The three-word list label is not the security check.
 - Anyone who can reach your instance can enter the pairing queue, subject to in-memory IP throttles (joins and successful matches), two concurrent waiters per IP, and a global queue cap. Limits reset when the process restarts.

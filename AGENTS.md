@@ -25,4 +25,4 @@ Product decisions live in `PRODUCT.md`. Treat that file as source of truth.
 - Never push to GitHub
 - Never commit secrets or put API keys in client code
 - Do not log public keys, ciphertext, or message bodies
-- Do not persist messages or pairings on the server
+- Do not persist messages, files, or pairings on the server
