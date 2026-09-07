@@ -295,14 +295,12 @@
 					<IdentityCard
 						title="Us"
 						names={[endpoint?.name || 'Unnamed']}
-						ip={channel.localIp}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
 					<IdentityCard
 						title="Them"
 						names={themCardNames(channel)}
-						ip={channel.peerIp}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>
@@ -313,7 +311,6 @@
 						variant="row"
 						title="Us"
 						names={[endpoint?.name || 'Unnamed']}
-						ip={channel.localIp}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
@@ -323,7 +320,6 @@
 						variant="row"
 						title="Them"
 						names={themCardNames(channel)}
-						ip={channel.peerIp}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>
