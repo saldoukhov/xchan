@@ -18,7 +18,7 @@ function admissionResponse(result: Extract<PairingAdmission, { ok: false }>): Re
 export const GET: RequestHandler = ({ url, request, getClientAddress }) => {
 	const commit = parseCommit(url.searchParams.get('commit'));
 	const identityPublicKey = parsePublicKey(url.searchParams.get('identityPublicKey'));
-	const ip = readClientIp(getClientAddress);
+	const ip = readClientIp(getClientAddress, request.headers);
 	const admitted = admitPairing(commit, ip);
 	if (!admitted.ok) {
 		return admissionResponse(admitted);

@@ -47,12 +47,7 @@ No environment variables are required. Use one replica.
 
 Railway builds from the `Dockerfile` (`npm ci`, `npm run build`, `npm start`). After deploy, open the `*.up.railway.app` URL on both devices.
 
-If the client IP shown in channels is the proxy instead of the peer, set these on the service (the `Dockerfile` already sets them):
-
-```
-ADDRESS_HEADER=X-Forwarded-For
-XFF_DEPTH=1
-```
+The app reads the leftmost public address in `X-Forwarded-For` (Railway’s edge CDN can append extra hops; SvelteKit’s default `XFF_DEPTH=1` would show the CDN). The `Dockerfile` still sets `ADDRESS_HEADER=X-Forwarded-For` as a fallback.
 
 ### Railway CLI
 
