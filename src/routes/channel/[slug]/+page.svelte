@@ -274,7 +274,8 @@
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
-		padding: 1rem 1.25rem;
+		padding: max(1rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+			max(1rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
 		box-sizing: border-box;
 		overflow: hidden;
 	}
@@ -426,7 +427,8 @@
 
 	@media (max-width: 480px) {
 		.channel-screen {
-			padding: 0.85rem 0.9rem;
+			padding: max(0.85rem, env(safe-area-inset-top)) max(0.9rem, env(safe-area-inset-right))
+				max(0.85rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
 		}
 	}
 </style>

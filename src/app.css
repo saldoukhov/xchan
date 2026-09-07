@@ -23,6 +23,7 @@ html,
 body {
 	margin: 0;
 	min-height: 100%;
+	min-height: 100dvh;
 	background:
 		radial-gradient(70rem 36rem at 50% -18%, var(--bg-glow), transparent 58%),
 		radial-gradient(28rem 20rem at 100% 110%, rgba(70, 90, 50, 0.16), transparent 55%), var(--bg);
@@ -36,7 +37,8 @@ body {
 main {
 	max-width: 56rem;
 	margin: 0 auto;
-	padding: 1.5rem 1.25rem 4rem;
+	padding: max(1.5rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+		max(4rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
 	box-sizing: border-box;
 }
 
@@ -309,7 +311,8 @@ dialog .row {
 
 @media (max-width: 640px) {
 	main {
-		padding: 1.1rem 0.9rem 3rem;
+		padding: max(1.1rem, env(safe-area-inset-top)) max(0.9rem, env(safe-area-inset-right))
+			max(3rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
 	}
 
 	section {

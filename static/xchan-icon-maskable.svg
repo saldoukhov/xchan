@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+	<rect width="512" height="512" fill="#161b14"/>
+	<!-- graphic sits inside the maskable safe zone (~80% of the canvas) -->
+	<line x1="176" y1="256" x2="336" y2="256" stroke="#c6e38a" stroke-width="32" stroke-linecap="round"/>
+	<circle cx="176" cy="256" r="52" fill="#c6e38a"/>
+	<circle cx="336" cy="256" r="52" fill="#c6e38a"/>
+	<circle cx="176" cy="256" r="22" fill="#16200c"/>
+	<circle cx="336" cy="256" r="22" fill="#16200c"/>
+</svg>

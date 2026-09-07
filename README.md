@@ -2,6 +2,8 @@
 
 Web app for pairing two devices and sending an ephemeral secret (for example a password from a computer you already have to a machine you are setting up).
 
+**Live at [xchan.dev](https://xchan.dev).** It is a PWA — install it from the browser on each device.
+
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/xchan)
 
 Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(public key)` first, then reveal the keys after a FIFO match. Messages are ECIES-encrypted to the peer’s pairing public key. The server is a relay only: it does not store keys, channels, or messages.
@@ -15,7 +17,7 @@ Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(p
 
 If the cards do not match, delete the channel and pair again.
 
-**Self-host this.** Pairing is a single FIFO queue for everyone on that instance. Do not run a public multi-tenant deployment.
+The hosted instance at [xchan.dev](https://xchan.dev) uses one FIFO pairing queue for everyone on that host. **Self-host this** if you want a private queue.
 
 Clearing site data destroys pairing keys and all channels. Horizontal scale needs a shared bus; v1 is one Node process.
 
