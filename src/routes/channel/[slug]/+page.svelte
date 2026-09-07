@@ -2,12 +2,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { channelLabel, findChannelBySlug } from '$lib/channel';
+	import { channelLabel, findChannelBySlug, themCardNames } from '$lib/channel';
 	import { base64ToBytes, bytesToBase64 } from '$lib/crypto/bytes';
 	import { decrypt, encrypt } from '$lib/crypto/ecies';
 	import { loadOrCreateEndpoint } from '$lib/crypto/keys';
-	import { listChannels } from '$lib/db';
+	import { listChannels, putChannel } from '$lib/db';
 	import Icon from '$lib/Icon.svelte';
+	import IdentityCard from '$lib/IdentityCard.svelte';
 	import type { Channel, ChannelEvent, Endpoint } from '$lib/types';
 
 	let endpoint = $state<Endpoint | null>(null);
@@ -42,10 +43,9 @@
 		void (async () => {
 			try {
 				const ep = await loadOrCreateEndpoint();
-				if (cancelled) return;
-				endpoint = ep;
 				const found = findChannelBySlug(await listChannels(), currentSlug) ?? null;
 				if (cancelled) return;
+				endpoint = ep;
 				channel = found;
 				missing = !found;
 			} catch (err) {
@@ -60,9 +60,10 @@
 	});
 
 	$effect(() => {
-		const selfKey = endpoint?.publicKey;
-		const privateKey = endpoint?.privateKey;
+		const selfKey = channel?.localPublicKey;
+		const privateKey = channel?.localPrivateKey;
 		const peer = channel?.peerPublicKey;
+		const selfName = endpoint?.name ?? '';
 		if (!selfKey || !privateKey || !peer) {
 			peerReady = false;
 			return;
@@ -73,12 +74,19 @@
 		draft = '';
 		copied = false;
 		sent = false;
-		const url = `/api/channel/events?self=${encodeURIComponent(selfKey)}&peer=${encodeURIComponent(peer)}`;
+		const url = `/api/channel/events?self=${encodeURIComponent(selfKey)}&peer=${encodeURIComponent(peer)}&name=${encodeURIComponent(selfName)}`;
 		const es = new EventSource(url);
 		es.onmessage = async (event) => {
 			const payload = JSON.parse(event.data) as ChannelEvent;
 			if (payload.type === 'status') {
 				peerReady = payload.ready;
+				if (payload.ready && payload.peerName !== undefined && channel) {
+					if (payload.peerName !== channel.peerName) {
+						const updated = { ...channel, peerName: payload.peerName };
+						channel = updated;
+						void putChannel(updated);
+					}
+				}
 				return;
 			}
 			if (payload.type === 'message') {
@@ -100,7 +108,7 @@
 	});
 
 	async function sendMessage() {
-		if (!endpoint || !channel || !peerReady || sending) return;
+		if (!channel || !peerReady || sending) return;
 		const text = draft;
 		if (!text) return;
 		sending = true;
@@ -114,7 +122,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					from: endpoint.publicKey,
+					from: channel.localPublicKey,
 					to: channel.peerPublicKey,
 					ciphertext: bytesToBase64(ciphertext)
 				})
@@ -175,7 +183,7 @@
 	{:else if missing}
 		<nav>{@render homeBtn()}</nav>
 		<p class="muted">This channel is not on this device.</p>
-	{:else if !endpoint || !channel}
+	{:else if !channel}
 		<nav>{@render homeBtn()}</nav>
 		<p class="muted">Opening channel…</p>
 	{:else}
@@ -186,6 +194,22 @@
 				{peerReady ? 'ready' : 'waiting'}
 			</span>
 		</nav>
+		<div class="ids">
+			<IdentityCard
+				title="Them"
+				names={themCardNames(channel)}
+				lifeHash={channel.peerLifeHash}
+				words={channel.peerWords}
+				compact
+			/>
+			<IdentityCard
+				title="Us"
+				names={[endpoint?.name || 'Unnamed']}
+				lifeHash={channel.localLifeHash}
+				words={channel.localWords}
+				compact
+			/>
+		</div>
 		<div class="stage">
 			<div class="panels">
 				<section class="pane">
@@ -262,6 +286,16 @@
 		flex-shrink: 0;
 	}
 
+	.ids {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0.65rem;
+		margin-top: 0.75rem;
+		flex-shrink: 0;
+		min-height: 0;
+		overflow: auto;
+	}
+
 	.status {
 		display: inline-flex;
 		align-items: center;
@@ -287,7 +321,8 @@
 		flex: 1;
 		min-height: 0;
 		display: flex;
-		padding-block: clamp(0.75rem, 4vh, 2.25rem);
+		align-items: flex-start;
+		padding-top: 0.65rem;
 		overflow: auto;
 	}
 
@@ -380,10 +415,6 @@
 	}
 
 	@media (min-width: 720px) {
-		.stage {
-			align-items: center;
-		}
-
 		.panels {
 			flex: none;
 			height: 50%;

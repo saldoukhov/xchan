@@ -19,3 +19,27 @@ export function findChannelBySlug(channels: Channel[], slug: string): Channel | 
 export function channelHref(channel: Channel): string {
 	return `/channel/${channelSlug(channel.peerFingerprint)}`;
 }
+
+export function mergeChannel(existing: Channel | undefined, incoming: Channel): Channel {
+	if (!existing) return incoming;
+	return {
+		...incoming,
+		localAlias: incoming.localAlias || existing.localAlias
+	};
+}
+
+export function findChannelByPeerIdentity(
+	channels: Channel[],
+	peerIdentityPublicKey: string
+): Channel | undefined {
+	return channels.find((channel) => channel.peerIdentityPublicKey === peerIdentityPublicKey);
+}
+
+export function themCardNames(channel: Channel): string[] {
+	const peer = channel.peerName.trim();
+	const alias = channel.localAlias.trim();
+	if (alias && peer && alias !== peer) return [alias, peer];
+	if (alias) return [alias];
+	if (peer) return [peer];
+	return ['Unnamed'];
+}

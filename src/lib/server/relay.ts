@@ -1,3 +1,5 @@
+import { commitOfPairing } from '$lib/crypto/hash';
+import { PAIRING_MS } from '$lib/pairing';
 import {
 	MAX_CONCURRENT_PER_IP,
 	MAX_QUEUE,
@@ -7,7 +9,7 @@ import {
 } from './pair-limit';
 import type { SseSink } from './sse';
 
-export const PAIRING_MS = 30_000;
+export { PAIRING_MS };
 export const MAX_CIPHERTEXT_BYTES = 64 * 1024;
 export const MAX_NAME_CHARS = 64;
 
@@ -15,16 +17,22 @@ export type PairingAdmission =
 	{ ok: true } | { ok: false; status: 429 | 503; retryAfterSec: number; message: string };
 
 type PairingEntry = {
-	publicKey: string;
+	commit: string;
+	publicKey: string | null;
+	identityPublicKey: string;
 	name: string;
 	ip: string;
 	sink: SseSink;
 	timer: ReturnType<typeof setTimeout>;
+	peer: PairingEntry | null;
 };
+
+export type RevealResult = 'ok' | 'unknown' | 'mismatch' | 'too_early';
 
 type ReadySession = {
 	self: string;
 	peer: string;
+	name: string;
 	sink: SseSink;
 };
 
@@ -54,25 +62,25 @@ function prunePending(at: number): void {
 	}
 }
 
-function waiterSnapshots(at: number): { publicKey: string; ip: string }[] {
+function waiterSnapshots(at: number): { commit: string; ip: string }[] {
 	prunePending(at);
 	const byKey = new Map<string, string>();
 	for (const entry of pairingQueue) {
-		byKey.set(entry.publicKey, entry.ip);
+		byKey.set(entry.commit, entry.ip);
 	}
-	for (const [publicKey, pending] of pendingAdmits) {
-		if (!byKey.has(publicKey)) byKey.set(publicKey, pending.ip);
+	for (const [commit, pending] of pendingAdmits) {
+		if (!byKey.has(commit)) byKey.set(commit, pending.ip);
 	}
-	return [...byKey].map(([publicKey, ip]) => ({ publicKey, ip }));
+	return [...byKey].map(([commit, ip]) => ({ commit, ip }));
 }
 
-export function admitPairing(publicKey: string, ip: string): PairingAdmission {
+export function admitPairing(commit: string, ip: string): PairingAdmission {
 	const at = now();
 	const waiters = waiterSnapshots(at);
-	if (waiters.some((waiter) => waiter.publicKey === publicKey)) {
-		const pending = pendingAdmits.get(publicKey);
+	if (waiters.some((waiter) => waiter.commit === commit)) {
+		const pending = pendingAdmits.get(commit);
 		if (pending) {
-			pendingAdmits.set(publicKey, { ip, expiresAt: at + PENDING_ADMIT_MS });
+			pendingAdmits.set(commit, { ip, expiresAt: at + PENDING_ADMIT_MS });
 		}
 		return { ok: true };
 	}
@@ -130,17 +138,23 @@ export function admitPairing(publicKey: string, ip: string): PairingAdmission {
 	}
 
 	limiter.recordJoin(key, at);
-	pendingAdmits.set(publicKey, { ip, expiresAt: at + PENDING_ADMIT_MS });
+	pendingAdmits.set(commit, { ip, expiresAt: at + PENDING_ADMIT_MS });
 	return { ok: true };
 }
 
-function removePairing(publicKey: string, reason: 'timeout' | 'cancelled'): boolean {
-	const index = pairingQueue.findIndex((entry) => entry.publicKey === publicKey);
+function removePairing(commit: string, reason: 'timeout' | 'cancelled'): boolean {
+	const index = pairingQueue.findIndex((entry) => entry.commit === commit);
 	if (index === -1) return false;
 	const [entry] = pairingQueue.splice(index, 1);
 	clearTimeout(entry.timer);
+	const peer = entry.peer;
+	entry.peer = null;
 	entry.sink.send({ type: reason });
 	entry.sink.close();
+	if (peer) {
+		peer.peer = null;
+		removePairing(peer.commit, 'cancelled');
+	}
 	return true;
 }
 
@@ -154,67 +168,127 @@ function recordPairMatch(a: PairingEntry, b: PairingEntry): void {
 }
 
 function tryMatch(): void {
-	while (pairingQueue.length >= 2) {
-		const aEntry = pairingQueue.shift()!;
-		const bIndex = pairingQueue.findIndex((entry) => entry.publicKey !== aEntry.publicKey);
-		if (bIndex === -1) {
-			pairingQueue.unshift(aEntry);
-			return;
-		}
-		const [bEntry] = pairingQueue.splice(bIndex, 1);
-		clearTimeout(aEntry.timer);
-		clearTimeout(bEntry.timer);
-		recordPairMatch(aEntry, bEntry);
-		aEntry.sink.send({
-			type: 'paired',
-			peerPublicKey: bEntry.publicKey,
-			peerName: bEntry.name,
-			peerIp: bEntry.ip
-		});
-		bEntry.sink.send({
-			type: 'paired',
-			peerPublicKey: aEntry.publicKey,
-			peerName: aEntry.name,
-			peerIp: aEntry.ip
-		});
-		queueMicrotask(() => {
-			aEntry.sink.close();
-			bEntry.sink.close();
-		});
+	for (;;) {
+		const unmatched = pairingQueue.filter((entry) => !entry.peer);
+		if (unmatched.length < 2) return;
+		const aEntry = unmatched[0];
+		const bEntry = unmatched.find(
+			(entry) =>
+				entry.commit !== aEntry.commit && entry.identityPublicKey !== aEntry.identityPublicKey
+		);
+		if (!bEntry) return;
+		aEntry.peer = bEntry;
+		bEntry.peer = aEntry;
+		aEntry.sink.send({ type: 'reveal', peerCommit: bEntry.commit });
+		bEntry.sink.send({ type: 'reveal', peerCommit: aEntry.commit });
 	}
 }
 
+function completePair(aEntry: PairingEntry, bEntry: PairingEntry): void {
+	if (!aEntry.publicKey || !bEntry.publicKey) return;
+	if (aEntry.identityPublicKey === bEntry.identityPublicKey) {
+		rejectSameDevice(aEntry, bEntry);
+		return;
+	}
+	recordPairMatch(aEntry, bEntry);
+	aEntry.peer = null;
+	bEntry.peer = null;
+	const aIndex = pairingQueue.indexOf(aEntry);
+	if (aIndex !== -1) pairingQueue.splice(aIndex, 1);
+	const bIndex = pairingQueue.indexOf(bEntry);
+	if (bIndex !== -1) pairingQueue.splice(bIndex, 1);
+	clearTimeout(aEntry.timer);
+	clearTimeout(bEntry.timer);
+	aEntry.sink.send({
+		type: 'paired',
+		peerPublicKey: bEntry.publicKey,
+		peerIdentityPublicKey: bEntry.identityPublicKey,
+		peerName: bEntry.name,
+		peerIp: bEntry.ip
+	});
+	bEntry.sink.send({
+		type: 'paired',
+		peerPublicKey: aEntry.publicKey,
+		peerIdentityPublicKey: aEntry.identityPublicKey,
+		peerName: aEntry.name,
+		peerIp: aEntry.ip
+	});
+	queueMicrotask(() => {
+		aEntry.sink.close();
+		bEntry.sink.close();
+	});
+}
+
+function rejectSameDevice(aEntry: PairingEntry, bEntry: PairingEntry): void {
+	aEntry.peer = null;
+	bEntry.peer = null;
+	const aIndex = pairingQueue.indexOf(aEntry);
+	if (aIndex !== -1) pairingQueue.splice(aIndex, 1);
+	const bIndex = pairingQueue.indexOf(bEntry);
+	if (bIndex !== -1) pairingQueue.splice(bIndex, 1);
+	clearTimeout(aEntry.timer);
+	clearTimeout(bEntry.timer);
+	aEntry.sink.send({ type: 'rejected', reason: 'same-device' });
+	bEntry.sink.send({ type: 'rejected', reason: 'same-device' });
+	queueMicrotask(() => {
+		aEntry.sink.close();
+		bEntry.sink.close();
+	});
+}
+
 export function joinPairing(
-	publicKey: string,
+	commit: string,
+	identityPublicKey: string,
 	name: string,
 	ip: string,
 	sink: SseSink
 ): () => void {
 	const alreadyWaiting =
-		pendingAdmits.has(publicKey) || pairingQueue.some((entry) => entry.publicKey === publicKey);
+		pendingAdmits.has(commit) || pairingQueue.some((entry) => entry.commit === commit);
 	if (!alreadyWaiting) {
-		const admitted = admitPairing(publicKey, ip);
+		const admitted = admitPairing(commit, ip);
 		if (!admitted.ok) {
 			throw new PairingRejected(admitted);
 		}
 	}
-	pendingAdmits.delete(publicKey);
-	removePairing(publicKey, 'cancelled');
+	pendingAdmits.delete(commit);
+	removePairing(commit, 'cancelled');
 	const entry: PairingEntry = {
-		publicKey,
+		commit,
+		publicKey: null,
+		identityPublicKey,
 		name,
 		ip,
 		sink,
+		peer: null,
 		timer: setTimeout(() => {
-			removePairing(publicKey, 'timeout');
+			removePairing(commit, 'timeout');
 		}, PAIRING_MS)
 	};
 	pairingQueue.push(entry);
 	sink.send({ type: 'waiting' });
 	tryMatch();
 	return () => {
-		removePairing(publicKey, 'cancelled');
+		removePairing(commit, 'cancelled');
 	};
+}
+
+export async function revealPairing(
+	commit: string,
+	publicKey: string,
+	identityPublicKey: string
+): Promise<RevealResult> {
+	const entry = pairingQueue.find((item) => item.commit === commit);
+	if (!entry) return 'unknown';
+	if (!entry.peer) return 'too_early';
+	if (identityPublicKey !== entry.identityPublicKey) return 'mismatch';
+	const expected = await commitOfPairing(publicKey, identityPublicKey);
+	if (expected !== commit) return 'mismatch';
+	entry.publicKey = publicKey;
+	if (entry.peer.publicKey && entry.peer.identityPublicKey) {
+		completePair(entry, entry.peer);
+	}
+	return 'ok';
 }
 
 export class PairingRejected extends Error {
@@ -227,34 +301,34 @@ export class PairingRejected extends Error {
 	}
 }
 
-export function cancelPairing(publicKey: string): boolean {
-	return removePairing(publicKey, 'cancelled');
+export function cancelPairing(commit: string): boolean {
+	return removePairing(commit, 'cancelled');
 }
 
-function notifyPeerStatus(self: string, peer: string, ready: boolean): void {
+function notifyPeerStatus(self: string, peer: string, ready: boolean, name: string): void {
 	const inverse = readySessions.get(peer);
 	if (inverse && inverse.peer === self) {
-		inverse.sink.send({ type: 'status', ready });
+		inverse.sink.send({ type: 'status', ready, peerName: name });
 	}
 }
 
-export function joinChannel(self: string, peer: string, sink: SseSink): () => void {
+export function joinChannel(self: string, peer: string, name: string, sink: SseSink): () => void {
 	const previous = readySessions.get(self);
 	if (previous) {
 		previous.sink.close();
 	}
-	readySessions.set(self, { self, peer, sink });
+	readySessions.set(self, { self, peer, name, sink });
 	const inverse = readySessions.get(peer);
 	const ready = Boolean(inverse && inverse.peer === self);
-	sink.send({ type: 'status', ready });
+	sink.send({ type: 'status', ready, peerName: ready ? inverse!.name : undefined });
 	if (ready) {
-		notifyPeerStatus(self, peer, true);
+		notifyPeerStatus(self, peer, true, name);
 	}
 	return () => {
 		const current = readySessions.get(self);
 		if (current?.sink === sink) {
 			readySessions.delete(self);
-			notifyPeerStatus(self, peer, false);
+			notifyPeerStatus(self, peer, false, name);
 		}
 	};
 }

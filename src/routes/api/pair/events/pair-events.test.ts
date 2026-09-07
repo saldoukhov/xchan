@@ -11,6 +11,12 @@ import type { SseSink } from '$lib/server/sse';
 import type { RequestHandler } from './$types';
 import { GET } from './+server';
 
+function commitId(n: number): string {
+	const raw = new Uint8Array(32);
+	raw[0] = n;
+	return bytesToBase64(raw);
+}
+
 function pub(n: number): string {
 	const raw = new Uint8Array(65);
 	raw[0] = 0x04;
@@ -18,9 +24,10 @@ function pub(n: number): string {
 	return bytesToBase64(raw);
 }
 
-function event(publicKey: string, ip: string): Parameters<RequestHandler>[0] {
+function event(commit: string, ip: string): Parameters<RequestHandler>[0] {
 	const url = new URL('http://localhost/api/pair/events');
-	url.searchParams.set('publicKey', publicKey);
+	url.searchParams.set('commit', commit);
+	url.searchParams.set('identityPublicKey', pub(1));
 	url.searchParams.set('name', 'Test');
 	return {
 		url,
@@ -48,10 +55,10 @@ function sink(): SseSink {
 describe('GET /api/pair/events', () => {
 	it('returns 429 with Retry-After before opening SSE when joins are exhausted', async () => {
 		for (let i = 1; i <= JOIN_MAX; i += 1) {
-			joinPairing(pub(i), 'A', '192.0.2.1', sink());
-			cancelPairing(pub(i));
+			joinPairing(commitId(i), pub(i), 'A', '192.0.2.1', sink());
+			cancelPairing(commitId(i));
 		}
-		const blocked = await GET(event(pub(9), '192.0.2.1'));
+		const blocked = await GET(event(commitId(9), '192.0.2.1'));
 		expect(blocked.status).toBe(429);
 		expect(blocked.headers.get('Retry-After')).toBeTruthy();
 		expect(blocked.headers.get('Content-Type')).toContain('text/plain');
@@ -59,7 +66,7 @@ describe('GET /api/pair/events', () => {
 	});
 
 	it('opens SSE for an admitted waiter', async () => {
-		const response = await GET(event(pub(1), '192.0.2.1'));
+		const response = await GET(event(commitId(1), '192.0.2.1'));
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Content-Type')).toBe('text/event-stream');
 		void response.body?.cancel();

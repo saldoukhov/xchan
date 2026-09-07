@@ -2,20 +2,31 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onMount, tick } from 'svelte';
-	import { channelSlug } from '$lib/channel';
+	import { channelSlug, findChannelByPeerIdentity, mergeChannel } from '$lib/channel';
 	import { base64ToBytes } from '$lib/crypto/bytes';
-	import { fingerprintFromBytes } from '$lib/crypto/fingerprint';
-	import { loadOrCreateEndpoint, resetAndCreateEndpoint, saveEndpointName } from '$lib/crypto/keys';
+	import { identityFromPublicKeyRaw } from '$lib/crypto/fingerprint';
+	import { commitOfPairing } from '$lib/crypto/hash';
+	import {
+		createPairingOffer,
+		loadOrCreateEndpoint,
+		resetAndCreateEndpoint,
+		saveEndpointName,
+		type PairingOffer
+	} from '$lib/crypto/keys';
 	import { deleteChannel, listChannels, putChannel } from '$lib/db';
+	import IdentityCard from '$lib/IdentityCard.svelte';
 	import Icon from '$lib/Icon.svelte';
+	import { PAIRING_SECONDS } from '$lib/pairing';
 	import type { Channel, Endpoint, PairEvent } from '$lib/types';
 
 	let endpoint = $state<Endpoint | null>(null);
 	let channels = $state<Channel[]>([]);
 	let loadError = $state('');
 	let pairing = $state(false);
-	let pairingSeconds = $state(30);
+	let pairingSeconds = $state(PAIRING_SECONDS);
 	let pairingNote = $state('');
+	let pairingOffer = $state<PairingOffer | null>(null);
+	let peerCommit = $state('');
 	let resetting = $state(false);
 
 	let editingName = $state(false);
@@ -38,7 +49,7 @@
 				endpoint = await loadOrCreateEndpoint();
 				channels = await listChannels();
 			} catch (err) {
-				loadError = err instanceof Error ? err.message : 'Could not create a device key';
+				loadError = err instanceof Error ? err.message : 'Could not load this device';
 			}
 		})();
 		return () => {
@@ -68,7 +79,7 @@
 	}
 
 	async function startEditAlias(channel: Channel) {
-		editingAliasKey = channel.peerPublicKey;
+		editingAliasKey = channel.peerIdentityPublicKey;
 		aliasDraft = channel.localAlias;
 		await tick();
 		aliasInput?.focus();
@@ -84,7 +95,9 @@
 		const localAlias = aliasDraft.trim().slice(0, 64);
 		const updated = { ...channel, localAlias };
 		await putChannel(updated);
-		channels = channels.map((c) => (c.peerPublicKey === channel.peerPublicKey ? updated : c));
+		channels = channels.map((c) =>
+			c.peerIdentityPublicKey === channel.peerIdentityPublicKey ? updated : c
+		);
 		cancelEditAlias();
 	}
 
@@ -101,32 +114,73 @@
 	}
 
 	function stopPairing(notifyServer: boolean) {
+		const commit = pairingOffer?.commit;
 		pairing = false;
+		pairingOffer = null;
+		peerCommit = '';
 		closePairSource();
-		if (notifyServer && endpoint) {
+		if (notifyServer && commit) {
 			void fetch('/api/pair/cancel', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ publicKey: endpoint.publicKey })
+				body: JSON.stringify({ commit })
 			});
 		}
 	}
 
-	async function finishPairing(payload: Extract<PairEvent, { type: 'paired' }>) {
+	async function finishPairing(
+		offer: PairingOffer,
+		payload: Extract<PairEvent, { type: 'paired' }>
+	) {
 		try {
+			if (
+				!peerCommit ||
+				(await commitOfPairing(payload.peerPublicKey, payload.peerIdentityPublicKey)) !== peerCommit
+			) {
+				stopPairing(true);
+				pairingNote = 'Peer key did not match the commit. Pairing aborted.';
+				return;
+			}
+			if (!endpoint) {
+				pairing = false;
+				pairingOffer = null;
+				pairingNote = 'Paired, but could not open the channel.';
+				return;
+			}
+			if (payload.peerIdentityPublicKey === endpoint.identityPublicKey) {
+				stopPairing(true);
+				pairingNote = 'This browser is already pairing. Use another browser or device.';
+				return;
+			}
 			const peerRaw = base64ToBytes(payload.peerPublicKey);
-			const channel: Channel = {
+			const peerCard = await identityFromPublicKeyRaw(peerRaw);
+			const existing = findChannelByPeerIdentity(channels, payload.peerIdentityPublicKey);
+			const channel = mergeChannel(existing, {
+				localPublicKey: offer.publicKey,
+				localPrivateKey: offer.keyPair.privateKey,
+				localPublicCryptoKey: offer.keyPair.publicKey,
+				localIdentityPublicKey: endpoint.identityPublicKey,
+				localWords: offer.identity.words,
+				localFingerprint: offer.identity.fingerprint,
+				localLifeHash: offer.identity.lifeHash,
 				peerPublicKey: payload.peerPublicKey,
-				peerFingerprint: await fingerprintFromBytes(peerRaw),
+				peerIdentityPublicKey: payload.peerIdentityPublicKey,
+				peerFingerprint: peerCard.fingerprint,
+				peerWords: peerCard.words,
+				peerLifeHash: peerCard.lifeHash,
 				peerName: payload.peerName,
 				localAlias: '',
 				peerIp: payload.peerIp
-			};
+			});
 			await putChannel(channel);
 			channels = await listChannels();
+			pairing = false;
+			pairingOffer = null;
+			peerCommit = '';
 			await goto(resolve('/channel/[slug]', { slug: channelSlug(channel.peerFingerprint) }));
 		} catch {
 			pairing = false;
+			pairingOffer = null;
 			pairingNote = 'Paired, but could not open the channel.';
 		}
 	}
@@ -135,13 +189,27 @@
 		if (!endpoint || pairing) return;
 		pairingNote = '';
 		pairing = true;
-		pairingSeconds = 30;
+		pairingSeconds = PAIRING_SECONDS;
+		peerCommit = '';
 		pairIgnoreErrors = false;
+		let offer: PairingOffer;
+		try {
+			offer = await createPairingOffer(endpoint.identityPublicKey);
+		} catch {
+			pairing = false;
+			pairingNote = 'Could not create a pairing key.';
+			return;
+		}
+		pairingOffer = offer;
 		const controller = new AbortController();
 		pairAbort = controller;
-		const url = `/api/pair/events?publicKey=${encodeURIComponent(endpoint.publicKey)}&name=${encodeURIComponent(endpoint.name)}`;
+		const url = `/api/pair/events?commit=${encodeURIComponent(offer.commit)}&identityPublicKey=${encodeURIComponent(offer.identityPublicKey)}&name=${encodeURIComponent(endpoint.name)}`;
 		pairTimer = setInterval(() => {
 			pairingSeconds = Math.max(0, pairingSeconds - 1);
+			if (pairingSeconds === 0) {
+				stopPairing(true);
+				pairingNote = 'Pairing timed out. Try again with both devices.';
+			}
 		}, 1000);
 		try {
 			const response = await fetch(url, {
@@ -170,10 +238,36 @@
 					stopPairing(false);
 					return;
 				}
+				if (payload.type === 'rejected') {
+					stopPairing(false);
+					pairingNote =
+						payload.reason === 'same-device'
+							? 'This browser is already pairing. Use another browser or device.'
+							: 'Pairing was rejected.';
+					return;
+				}
+				if (payload.type === 'reveal') {
+					peerCommit = payload.peerCommit;
+					void fetch('/api/pair/reveal', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							commit: offer.commit,
+							publicKey: offer.publicKey,
+							identityPublicKey: offer.identityPublicKey
+						})
+					}).then(async (res) => {
+						if (!res.ok && pairing) {
+							stopPairing(true);
+							pairingNote = 'Could not reveal pairing key.';
+						}
+					});
+					return;
+				}
 				if (payload.type === 'paired') {
 					pairingNote = '';
 					closePairSource();
-					void finishPairing(payload);
+					void finishPairing(offer, payload);
 				}
 			});
 			if (!pairIgnoreErrors && pairing) {
@@ -218,9 +312,9 @@
 	}
 
 	async function removeChannel(channel: Channel) {
-		await deleteChannel(channel.peerPublicKey);
-		channels = channels.filter((c) => c.peerPublicKey !== channel.peerPublicKey);
-		if (editingAliasKey === channel.peerPublicKey) {
+		await deleteChannel(channel.peerIdentityPublicKey);
+		channels = channels.filter((c) => c.peerIdentityPublicKey !== channel.peerIdentityPublicKey);
+		if (editingAliasKey === channel.peerIdentityPublicKey) {
 			cancelEditAlias();
 		}
 	}
@@ -324,17 +418,13 @@
 	{#if loadError}
 		<p class="error">{loadError}</p>
 	{:else if !endpoint}
-		<p class="muted">Creating a device key…</p>
+		<p class="muted">Loading…</p>
 	{:else}
 		<section class="endpoint">
 			<div class="section-head">
 				<h2>This endpoint</h2>
 			</div>
 			<div class="endpoint-grid">
-				<div class="fact">
-					<span class="label">Fingerprint</span>
-					<code>{endpoint.fingerprint}</code>
-				</div>
 				<div class="fact">
 					<span class="label">Name</span>
 					{#if editingName}
@@ -372,6 +462,16 @@
 					<button type="button" class="pair-tile" onclick={startPairing}>Pair</button>
 				{/if}
 			</div>
+			{#if pairingOffer}
+				<div class="pair-card">
+					<IdentityCard
+						title="Us"
+						names={[endpoint.name || 'Unnamed']}
+						lifeHash={pairingOffer.identity.lifeHash}
+						words={pairingOffer.identity.words}
+					/>
+				</div>
+			{/if}
 			{#if pairingNote}
 				<p class="error note">{pairingNote}</p>
 			{/if}
@@ -386,7 +486,8 @@
 			</div>
 			{#if channels.length === 0}
 				<p class="empty">
-					No pairings yet. Open this app on another device and press Pair on both.
+					No pairings yet. Open this app on another device and press Pair on both within 15 seconds.
+					Compare LifeHash and the word grid before sending.
 				</p>
 			{:else}
 				<div class="table-wrap">
@@ -401,22 +502,33 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each channels as channel (channel.peerPublicKey)}
+							{#each channels as channel (channel.peerIdentityPublicKey)}
 								<tr
 									class="channel-row"
 									onclick={(event) => onChannelRowClick(channel, event)}
 									onauxclick={(event) => onChannelRowAuxClick(channel, event)}
 								>
 									<td>
-										<a class="row-link" href={channelPath(channel)}
-											>{channel.peerName || 'Unnamed endpoint'}</a
-										>
-										<div class="finger-mobile">
-											<code>{channel.peerFingerprint}</code>
+										<div class="peer-cell">
+											<img
+												class="lifehash-thumb"
+												src={channel.peerLifeHash}
+												width="64"
+												height="64"
+												alt=""
+											/>
+											<div>
+												<a class="row-link" href={channelPath(channel)}
+													>{channel.peerName || 'Unnamed endpoint'}</a
+												>
+												<div class="finger-mobile">
+													<code>{channel.peerFingerprint}</code>
+												</div>
+											</div>
 										</div>
 									</td>
 									<td>
-										{#if editingAliasKey === channel.peerPublicKey}
+										{#if editingAliasKey === channel.peerIdentityPublicKey}
 											<div class="edit-row">
 												<input
 													bind:this={aliasInput}
@@ -484,7 +596,7 @@
 <dialog bind:this={resetDialog} aria-labelledby="reset-title" onclick={onResetDialogClick}>
 	<h3 id="reset-title">Reset this device?</h3>
 	<p>
-		This deletes the key in this browser and every channel stored here. You cannot undo it. Other
+		This deletes the name and every channel stored in this browser. You cannot undo it. Other
 		devices keep their own keys.
 	</p>
 	<div class="row">
@@ -526,6 +638,26 @@
 		gap: 0.75rem;
 	}
 
+	.pair-card {
+		margin-top: 0.85rem;
+	}
+
+	.peer-cell {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		min-width: 0;
+	}
+
+	.lifehash-thumb {
+		width: 2.5rem;
+		height: 2.5rem;
+		flex-shrink: 0;
+		image-rendering: pixelated;
+		border-radius: 6px;
+		background: #0b0e0a;
+	}
+
 	.fact,
 	.pair-tile {
 		min-height: 4.6rem;
@@ -547,7 +679,6 @@
 		gap: 0.45rem;
 	}
 
-	.fact code,
 	.value {
 		font-size: 1.02rem;
 	}
@@ -671,11 +802,10 @@
 
 	@media (min-width: 480px) {
 		.endpoint-grid {
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: 1fr minmax(8.75rem, 10.5rem);
 		}
 
 		.pair-tile {
-			grid-column: 1 / -1;
 			min-height: 3.4rem;
 			flex-direction: row;
 			gap: 0.65rem;
@@ -684,7 +814,7 @@
 
 	@media (min-width: 800px) {
 		.endpoint-grid {
-			grid-template-columns: 1fr 1fr minmax(8.75rem, 10.5rem);
+			grid-template-columns: 1fr minmax(8.75rem, 10.5rem);
 		}
 
 		.fact,

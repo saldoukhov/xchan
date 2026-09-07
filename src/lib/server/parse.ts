@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { base64ToBytes, isUncompressedP256 } from '$lib/crypto/bytes';
+import { isSha256Commit } from '$lib/crypto/hash';
 import { MAX_CIPHERTEXT_BYTES, MAX_NAME_CHARS } from './relay';
 
 export function parsePublicKey(value: string | null): string {
@@ -14,6 +15,22 @@ export function parsePublicKey(value: string | null): string {
 	}
 	if (!isUncompressedP256(raw)) {
 		error(400, 'invalid publicKey');
+	}
+	return value;
+}
+
+export function parseCommit(value: string | null): string {
+	if (!value) {
+		error(400, 'commit required');
+	}
+	let raw: Uint8Array;
+	try {
+		raw = base64ToBytes(value);
+	} catch {
+		error(400, 'invalid commit');
+	}
+	if (!isSha256Commit(raw)) {
+		error(400, 'invalid commit');
 	}
 	return value;
 }
