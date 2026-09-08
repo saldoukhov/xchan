@@ -884,6 +884,7 @@
 
 	.lede {
 		grid-column: 1 / -1;
+		max-width: none;
 	}
 
 	.update-banner {
