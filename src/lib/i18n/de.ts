@@ -154,7 +154,7 @@ export const de: Messages = {
 			'Öffne denselben Kanal auf beiden Geräten. Wenn der Status <strong>Bereit</strong> ist, sende Text oder eine Datei (bis 50 MB). Das andere Gerät speichert die Datei automatisch.',
 		checkTitle: 'Warum Bild und Wörter wichtig sind',
 		check1:
-			'Auf der öffentlichen Seite kann jede Person im selben Moment auf Koppeln tippen, und die nächsten zwei Geräte werden verbunden. Das Bild (ein LifeHash) und die vollständige 24-Wörter-Liste bestätigen, dass du das gemeinte Gerät erreicht hast — nicht eine fremde Person.',
+			'Auf der öffentlichen Seite kann jede Person im selben Moment auf Koppeln tippen, und die nächsten zwei Geräte werden verbunden. Zwei Geräte im selben Netz werden zuerst miteinander verbunden. Das Bild (ein LifeHash) und die vollständige 24-Wörter-Liste bestätigen, dass du das gemeinte Gerät erreicht hast — nicht eine fremde Person.',
 		check2:
 			'Wenn du beide Bildschirme siehst, vergleiche sie. Wenn das andere Gerät weit weg ist — deins oder das einer anderen Person — kopiere Bild und Wörterliste von der Karte und sende sie, oder lies die Wörter in einem Anruf vor.',
 		check3:

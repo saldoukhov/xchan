@@ -147,7 +147,7 @@ export const en = {
 			'Open the same channel on both devices. When status is <strong>Ready</strong>, send text or a file (up to 50 MB). The other device saves the file automatically.',
 		checkTitle: 'Why the picture and words matter',
 		check1:
-			'On the public site, anyone can press Pair at the same moment, and the next two devices are matched. The picture (a LifeHash) and the full 24-word list are how you confirm you connected to the device you meant — not a stranger.',
+			'On the public site, anyone can press Pair at the same moment, and the next two devices are matched. Two devices on the same network are matched with each other first. The picture (a LifeHash) and the full 24-word list are how you confirm you connected to the device you meant — not a stranger.',
 		check2:
 			'If you can see both screens, compare them. If the other device is far away — yours, or someone else’s — copy the picture and the word list from the card and send them, or read the words on a call.',
 		check3:

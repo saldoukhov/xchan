@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { bytesToBase64 } from '$lib/crypto/bytes';
 import { commitOfPairing } from '$lib/crypto/hash';
 import {
+	CROSS_NETWORK_GRACE_MS,
 	JOIN_MAX,
 	JOIN_MAX_UNKNOWN,
 	JOIN_WINDOW_MS,
+	MAX_CONCURRENT_PER_IP,
 	MAX_QUEUE,
-	MATCH_WINDOW_MS
+	sameKnownPairingNetwork
 } from './pair-limit';
 import {
 	admitPairing,
@@ -49,18 +51,27 @@ function idPub(n: number): string {
 	return pub(n + 100);
 }
 
+let relayNow = 1_000_000;
+
+function advanceRelay(ms: number): void {
+	relayNow += ms;
+	setRelayNowForTests(relayNow);
+}
+
 async function pair(a: number, b: number, ipA: string, ipB = ipA): Promise<void> {
 	const commitA = await commitOfPairing(pub(a), idPub(a));
 	const commitB = await commitOfPairing(pub(b), idPub(b));
 	joinPairing(commitA, idPub(a), ipA, sink());
 	joinPairing(commitB, idPub(b), ipB, sink());
+	if (!sameKnownPairingNetwork(ipA, ipB)) advanceRelay(CROSS_NETWORK_GRACE_MS);
 	expect(await revealPairing(commitA, pub(a), idPub(a))).toBe('ok');
 	expect(await revealPairing(commitB, pub(b), idPub(b))).toBe('ok');
 }
 
 beforeEach(() => {
 	resetRelayForTests();
-	setRelayNowForTests(1_000_000);
+	relayNow = 1_000_000;
+	setRelayNowForTests(relayNow);
 });
 
 afterEach(() => {
@@ -75,6 +86,7 @@ describe('pairing', () => {
 		const commitB = await commitOfPairing(pub(2), idPub(2));
 		joinPairing(commitA, idPub(1), '192.0.2.10', left);
 		joinPairing(commitB, idPub(2), '192.0.2.20', right);
+		advanceRelay(CROSS_NETWORK_GRACE_MS);
 		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitB });
 		expect(right.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
 		expect(left.events.some((event) => (event as { type?: string }).type === 'paired')).toBe(false);
@@ -100,6 +112,7 @@ describe('pairing', () => {
 		const commitB = await commitOfPairing(pub(2), idPub(2));
 		joinPairing(commitA, idPub(1), '192.0.2.10', sink());
 		joinPairing(commitB, idPub(2), '192.0.2.20', sink());
+		advanceRelay(CROSS_NETWORK_GRACE_MS);
 		expect(await revealPairing(commitA, pub(2), idPub(1))).toBe('mismatch');
 	});
 
@@ -110,6 +123,7 @@ describe('pairing', () => {
 		const commitB = await commitOfPairing(pub(2), idPub(2));
 		joinPairing(commitA, idPub(1), '192.0.2.10', left);
 		joinPairing(commitB, idPub(2), '192.0.2.20', right);
+		advanceRelay(CROSS_NETWORK_GRACE_MS);
 		cancelPairing(commitA);
 		expect(right.events).toContainEqual({ type: 'cancelled' });
 	});
@@ -128,11 +142,81 @@ describe('pairing', () => {
 			false
 		);
 		joinPairing(commitC, idPub(3), '198.51.100.1', extra);
+		advanceRelay(CROSS_NETWORK_GRACE_MS);
 		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitC });
 		expect(extra.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
 		expect(right.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
 			false
 		);
+	});
+
+	it('matches two waiters on the same network before a stranger already in the queue', async () => {
+		const stranger = sink();
+		const left = sink();
+		const right = sink();
+		const commitS = await commitOfPairing(pub(1), idPub(1));
+		const commitA = await commitOfPairing(pub(2), idPub(2));
+		const commitB = await commitOfPairing(pub(3), idPub(3));
+		joinPairing(commitS, idPub(1), '198.51.100.9', stranger);
+		joinPairing(commitA, idPub(2), '192.0.2.10', left);
+		expect(left.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(false);
+		joinPairing(commitB, idPub(3), '192.0.2.10', right);
+		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitB });
+		expect(right.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
+		expect(stranger.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
+			false
+		);
+	});
+
+	it('matches two waiters in the same IPv6 /64 before a stranger', async () => {
+		const stranger = sink();
+		const left = sink();
+		const right = sink();
+		const commitS = await commitOfPairing(pub(1), idPub(1));
+		const commitA = await commitOfPairing(pub(2), idPub(2));
+		const commitB = await commitOfPairing(pub(3), idPub(3));
+		joinPairing(commitS, idPub(1), '198.51.100.9', stranger);
+		joinPairing(commitA, idPub(2), '2001:db8:1:2::1', left);
+		expect(left.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(false);
+		joinPairing(commitB, idPub(3), '2001:db8:1:2::ffff', right);
+		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitB });
+		expect(right.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
+		expect(stranger.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
+			false
+		);
+	});
+
+	it('does not treat unknown IPs as the same network when matching', async () => {
+		const stranger = sink();
+		const left = sink();
+		const right = sink();
+		const commitS = await commitOfPairing(pub(1), idPub(1));
+		const commitA = await commitOfPairing(pub(2), idPub(2));
+		const commitB = await commitOfPairing(pub(3), idPub(3));
+		joinPairing(commitS, idPub(1), '198.51.100.9', stranger);
+		joinPairing(commitA, idPub(2), '', left);
+		joinPairing(commitB, idPub(3), '', right);
+		advanceRelay(CROSS_NETWORK_GRACE_MS);
+		expect(stranger.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
+		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitS });
+		expect(right.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(
+			false
+		);
+	});
+
+	it('FIFO-matches different networks only after the grace period', async () => {
+		const left = sink();
+		const right = sink();
+		const commitA = await commitOfPairing(pub(1), idPub(1));
+		const commitB = await commitOfPairing(pub(2), idPub(2));
+		joinPairing(commitA, idPub(1), '192.0.2.10', left);
+		joinPairing(commitB, idPub(2), '192.0.2.20', right);
+		expect(left.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(false);
+		advanceRelay(CROSS_NETWORK_GRACE_MS - 1);
+		expect(left.events.some((event) => (event as { type?: string }).type === 'reveal')).toBe(false);
+		advanceRelay(1);
+		expect(left.events).toContainEqual({ type: 'reveal', peerCommit: commitB });
+		expect(right.events).toContainEqual({ type: 'reveal', peerCommit: commitA });
 	});
 });
 
@@ -163,20 +247,20 @@ describe('admitPairing', () => {
 		expect(admitPairing(commitId(8), '192.0.2.1').ok).toBe(true);
 	});
 
-	it('rejects a third concurrent waiter from the same IP', () => {
-		expect(admitPairing(commitId(1), '192.0.2.1').ok).toBe(true);
-		expect(admitPairing(commitId(2), '192.0.2.1').ok).toBe(true);
-		expect(admitPairing(commitId(3), '192.0.2.1')).toMatchObject({ ok: false, status: 429 });
+	it('rejects a fifth concurrent waiter from the same IP', () => {
+		for (let i = 1; i <= MAX_CONCURRENT_PER_IP; i += 1) {
+			expect(admitPairing(commitId(i), '192.0.2.1').ok).toBe(true);
+		}
+		expect(admitPairing(commitId(MAX_CONCURRENT_PER_IP + 1), '192.0.2.1')).toMatchObject({
+			ok: false,
+			status: 429
+		});
 	});
 
-	it('charges one match token for a same-IP pair', async () => {
+	it('does not spend per-IP match budget on a same-network pair', async () => {
 		await pair(1, 2, '192.0.2.1');
-		expect(admitPairing(await commitOfPairing(pub(3), idPub(3)), '192.0.2.1').ok).toBe(true);
 		await pair(3, 4, '192.0.2.1');
-		const blocked = admitPairing(await commitOfPairing(pub(5), idPub(5)), '192.0.2.1');
-		expect(blocked).toMatchObject({ ok: false, status: 429 });
-		expect(blocked.ok === false && blocked.message).toContain('Too many recent pairings');
-		setRelayNowForTests(1_000_000 + MATCH_WINDOW_MS + 1);
+		setRelayNowForTests(1_000_000 + JOIN_WINDOW_MS + 1);
 		expect(admitPairing(await commitOfPairing(pub(5), idPub(5)), '192.0.2.1').ok).toBe(true);
 	});
 
@@ -188,10 +272,14 @@ describe('admitPairing', () => {
 	});
 
 	it('treats IPv6 addresses in the same /64 as one key', () => {
-		expect(admitPairing(commitId(1), '2001:db8:1:2::1').ok).toBe(true);
-		expect(admitPairing(commitId(2), '2001:db8:1:2::ffff').ok).toBe(true);
-		expect(admitPairing(commitId(3), '2001:db8:1:2::3')).toMatchObject({ ok: false, status: 429 });
-		expect(admitPairing(commitId(4), '2001:db8:1:3::1').ok).toBe(true);
+		for (let i = 1; i <= MAX_CONCURRENT_PER_IP; i += 1) {
+			expect(admitPairing(commitId(i), `2001:db8:1:2::${i.toString(16)}`).ok).toBe(true);
+		}
+		expect(admitPairing(commitId(9), '2001:db8:1:2::ffff')).toMatchObject({
+			ok: false,
+			status: 429
+		});
+		expect(admitPairing(commitId(10), '2001:db8:1:3::1').ok).toBe(true);
 	});
 
 	it('uses a stricter join cap for unknown IPs', () => {
@@ -205,7 +293,10 @@ describe('admitPairing', () => {
 
 	it('rejects a second successful pairing from an unknown IP', async () => {
 		await pair(1, 2, '');
-		expect(admitPairing(commitId(3), '')).toMatchObject({ ok: false, status: 429 });
+		setRelayNowForTests(1_000_000 + JOIN_WINDOW_MS + 1);
+		const blocked = admitPairing(commitId(3), '');
+		expect(blocked).toMatchObject({ ok: false, status: 429 });
+		expect(blocked.ok === false && blocked.message).toContain('Too many recent pairings');
 	});
 
 	it('rejects a new join when the global queue is full', () => {
@@ -222,6 +313,14 @@ describe('admitPairing', () => {
 		for (let i = 0; i < 4; i += 1) {
 			const a = i * 2 + 1;
 			await pair(a, a + 1, `203.0.113.${a}`, `203.0.113.${a + 1}`);
+		}
+		expect(admitPairing(commitId(20), '192.0.2.99')).toMatchObject({ ok: false, status: 429 });
+	});
+
+	it('counts same-network pairs toward the global match cap', async () => {
+		for (let i = 0; i < 4; i += 1) {
+			const a = i * 2 + 1;
+			await pair(a, a + 1, `203.0.113.${a}`);
 		}
 		expect(admitPairing(commitId(20), '192.0.2.99')).toMatchObject({ ok: false, status: 429 });
 	});

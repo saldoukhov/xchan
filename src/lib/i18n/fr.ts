@@ -154,7 +154,7 @@ export const fr: Messages = {
 			'Ouvrez le même canal sur les deux appareils. Quand le statut est <strong>Prêt</strong>, envoyez du texte ou un fichier (jusqu’à 50 Mo). L’autre appareil enregistre le fichier automatiquement.',
 		checkTitle: 'Pourquoi l’image et les mots comptent',
 		check1:
-			'Sur le site public, n’importe qui peut appuyer sur Associer au même moment, et les deux appareils suivants sont mis en relation. L’image (un LifeHash) et la liste complète de 24 mots permettent de confirmer que vous êtes connecté à l’appareil visé — pas à un inconnu.',
+			'Sur le site public, n’importe qui peut appuyer sur Associer au même moment, et les deux appareils suivants sont mis en relation. Deux appareils sur le même réseau sont d’abord associés entre eux. L’image (un LifeHash) et la liste complète de 24 mots permettent de confirmer que vous êtes connecté à l’appareil visé — pas à un inconnu.',
 		check2:
 			'Si vous voyez les deux écrans, comparez-les. Si l’autre appareil est loin — le vôtre, ou celui de quelqu’un d’autre — copiez l’image et la liste de mots depuis la carte et envoyez-les, ou lisez les mots au téléphone.',
 		check3:

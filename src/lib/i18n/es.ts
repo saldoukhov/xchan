@@ -152,7 +152,7 @@ export const es: Messages = {
 			'Abre el mismo canal en ambos dispositivos. Cuando el estado sea <strong>Listo</strong>, envía texto o un archivo (hasta 50 MB). El otro dispositivo guarda el archivo automáticamente.',
 		checkTitle: 'Por qué importan la imagen y las palabras',
 		check1:
-			'En el sitio público, cualquiera puede pulsar Emparejar al mismo tiempo, y se emparejan los dos siguientes dispositivos. La imagen (un LifeHash) y la lista completa de 24 palabras son cómo confirmas que te conectaste al dispositivo que querías, no a un desconocido.',
+			'En el sitio público, cualquiera puede pulsar Emparejar al mismo tiempo, y se emparejan los dos siguientes dispositivos. Dos dispositivos en la misma red se emparejan entre sí primero. La imagen (un LifeHash) y la lista completa de 24 palabras son cómo confirmas que te conectaste al dispositivo que querías, no a un desconocido.',
 		check2:
 			'Si puedes ver ambas pantallas, compáralas. Si el otro dispositivo está lejos —el tuyo o el de otra persona—, copia la imagen y la lista de palabras de la tarjeta y envíalas, o lee las palabras en una llamada.',
 		check3:

@@ -10,9 +10,17 @@ export type WhatsNew = {
 };
 
 /** Keep equal to package.json version. Newest release first. */
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.1.2';
 
 export const RELEASES: Release[] = [
+	{
+		version: '1.1.2',
+		date: '2026-09-08',
+		notes: [
+			'Two devices on the same network pair with each other first, so a laptop and phone on the same Wi-Fi are less likely to match a stranger.',
+			'Several people behind the same network can pair at once. Pairing two devices on that network no longer uses up the network’s pairing budget.'
+		]
+	},
 	{
 		version: '1.1.1',
 		date: '2026-09-08',

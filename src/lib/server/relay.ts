@@ -2,11 +2,13 @@ import { commitOfPairing } from '$lib/crypto/hash';
 import { MAX_CIPHERTEXT_BYTES } from '$lib/payload';
 import { PAIRING_MS } from '$lib/pairing';
 import {
+	CROSS_NETWORK_GRACE_MS,
 	MAX_CONCURRENT_PER_IP,
 	MAX_QUEUE,
 	PairLimiter,
 	PENDING_ADMIT_MS,
-	pairingLimitKey
+	pairingLimitKey,
+	sameKnownPairingNetwork
 } from './pair-limit';
 import type { SseSink } from './sse';
 
@@ -21,7 +23,9 @@ type PairingEntry = {
 	identityPublicKey: string;
 	ip: string;
 	sink: SseSink;
+	joinedAt: number;
 	timer: ReturnType<typeof setTimeout>;
+	graceTimer: ReturnType<typeof setTimeout> | undefined;
 	peer: PairingEntry | null;
 };
 
@@ -141,11 +145,16 @@ export function admitPairing(commit: string, ip: string): PairingAdmission {
 	return { ok: true };
 }
 
+function clearPairingTimers(entry: PairingEntry): void {
+	clearTimeout(entry.timer);
+	if (entry.graceTimer) clearTimeout(entry.graceTimer);
+}
+
 function removePairing(commit: string, reason: 'timeout' | 'cancelled'): boolean {
 	const index = pairingQueue.findIndex((entry) => entry.commit === commit);
 	if (index === -1) return false;
 	const [entry] = pairingQueue.splice(index, 1);
-	clearTimeout(entry.timer);
+	clearPairingTimers(entry);
 	const peer = entry.peer;
 	entry.peer = null;
 	entry.sink.send({ type: reason });
@@ -159,27 +168,43 @@ function removePairing(commit: string, reason: 'timeout' | 'cancelled'): boolean
 
 function recordPairMatch(a: PairingEntry, b: PairingEntry): void {
 	const at = now();
-	const keys = new Set([pairingLimitKey(a.ip), pairingLimitKey(b.ip)]);
-	for (const key of keys) {
-		limiter.recordMatch(key, at);
+	if (!sameKnownPairingNetwork(a.ip, b.ip)) {
+		const keys = new Set([pairingLimitKey(a.ip), pairingLimitKey(b.ip)]);
+		for (const key of keys) {
+			limiter.recordMatch(key, at);
+		}
 	}
 	limiter.recordGlobalMatch(at);
+}
+
+function canPair(a: PairingEntry, b: PairingEntry): boolean {
+	return a.commit !== b.commit && a.identityPublicKey !== b.identityPublicKey;
+}
+
+function findMatch(unmatched: PairingEntry[]): { a: PairingEntry; b: PairingEntry } | null {
+	for (const a of unmatched) {
+		const b = unmatched.find(
+			(entry) => canPair(a, entry) && sameKnownPairingNetwork(a.ip, entry.ip)
+		);
+		if (b) return { a, b };
+	}
+	const at = now();
+	const ready = unmatched.filter((entry) => at - entry.joinedAt >= CROSS_NETWORK_GRACE_MS);
+	if (ready.length < 2) return null;
+	const a = ready[0];
+	const b = ready.find((entry) => canPair(a, entry));
+	return b ? { a, b } : null;
 }
 
 function tryMatch(): void {
 	for (;;) {
 		const unmatched = pairingQueue.filter((entry) => !entry.peer);
-		if (unmatched.length < 2) return;
-		const aEntry = unmatched[0];
-		const bEntry = unmatched.find(
-			(entry) =>
-				entry.commit !== aEntry.commit && entry.identityPublicKey !== aEntry.identityPublicKey
-		);
-		if (!bEntry) return;
-		aEntry.peer = bEntry;
-		bEntry.peer = aEntry;
-		aEntry.sink.send({ type: 'reveal', peerCommit: bEntry.commit });
-		bEntry.sink.send({ type: 'reveal', peerCommit: aEntry.commit });
+		const pair = findMatch(unmatched);
+		if (!pair) return;
+		pair.a.peer = pair.b;
+		pair.b.peer = pair.a;
+		pair.a.sink.send({ type: 'reveal', peerCommit: pair.b.commit });
+		pair.b.sink.send({ type: 'reveal', peerCommit: pair.a.commit });
 	}
 }
 
@@ -196,8 +221,8 @@ function completePair(aEntry: PairingEntry, bEntry: PairingEntry): void {
 	if (aIndex !== -1) pairingQueue.splice(aIndex, 1);
 	const bIndex = pairingQueue.indexOf(bEntry);
 	if (bIndex !== -1) pairingQueue.splice(bIndex, 1);
-	clearTimeout(aEntry.timer);
-	clearTimeout(bEntry.timer);
+	clearPairingTimers(aEntry);
+	clearPairingTimers(bEntry);
 	aEntry.sink.send({
 		type: 'paired',
 		peerPublicKey: bEntry.publicKey,
@@ -223,8 +248,8 @@ function rejectSameDevice(aEntry: PairingEntry, bEntry: PairingEntry): void {
 	if (aIndex !== -1) pairingQueue.splice(aIndex, 1);
 	const bIndex = pairingQueue.indexOf(bEntry);
 	if (bIndex !== -1) pairingQueue.splice(bIndex, 1);
-	clearTimeout(aEntry.timer);
-	clearTimeout(bEntry.timer);
+	clearPairingTimers(aEntry);
+	clearPairingTimers(bEntry);
 	aEntry.sink.send({ type: 'rejected', reason: 'same-device' });
 	bEntry.sink.send({ type: 'rejected', reason: 'same-device' });
 	queueMicrotask(() => {
@@ -256,9 +281,16 @@ export function joinPairing(
 		ip,
 		sink,
 		peer: null,
+		joinedAt: now(),
 		timer: setTimeout(() => {
 			removePairing(commit, 'timeout');
-		}, PAIRING_MS)
+		}, PAIRING_MS),
+		graceTimer:
+			nowOverride === null
+				? setTimeout(() => {
+						tryMatch();
+					}, CROSS_NETWORK_GRACE_MS)
+				: undefined
 	};
 	pairingQueue.push(entry);
 	sink.send({ type: 'waiting' });
@@ -382,11 +414,12 @@ export function sendCiphertext(from: string, to: string, ciphertext: string): bo
 
 export function setRelayNowForTests(ms: number | null): void {
 	nowOverride = ms;
+	if (ms !== null) tryMatch();
 }
 
 export function resetRelayForTests(): void {
 	for (const entry of pairingQueue) {
-		clearTimeout(entry.timer);
+		clearPairingTimers(entry);
 	}
 	pairingQueue.length = 0;
 	pendingAdmits.clear();

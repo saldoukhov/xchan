@@ -6,8 +6,9 @@ export const JOIN_MAX_UNKNOWN = 2;
 export const MATCH_WINDOW_MS = 10 * 60_000;
 export const MATCH_MAX = 2;
 export const MATCH_MAX_UNKNOWN = 1;
-export const MAX_CONCURRENT_PER_IP = 2;
+export const MAX_CONCURRENT_PER_IP = 4;
 export const MAX_QUEUE = 8;
+export const CROSS_NETWORK_GRACE_MS = 2_000;
 export const GLOBAL_MATCH_WINDOW_MS = 60_000;
 export const GLOBAL_MATCH_MAX = 4;
 export const PENDING_ADMIT_MS = 10_000;
@@ -38,6 +39,13 @@ export function pairingLimitKey(ip: string): string {
 
 export function isUnknownLimitKey(key: string): boolean {
 	return key === UNKNOWN_KEY;
+}
+
+/** True when both addresses share a real IPv4 or IPv6 /64. Unknown IPs are not a network. */
+export function sameKnownPairingNetwork(ipA: string, ipB: string): boolean {
+	const key = pairingLimitKey(ipA);
+	if (isUnknownLimitKey(key)) return false;
+	return key === pairingLimitKey(ipB);
 }
 
 function expandIpv6(address: string): string[] | null {

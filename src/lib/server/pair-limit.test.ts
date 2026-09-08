@@ -5,7 +5,8 @@ import {
 	MATCH_MAX,
 	MATCH_WINDOW_MS,
 	PairLimiter,
-	pairingLimitKey
+	pairingLimitKey,
+	sameKnownPairingNetwork
 } from './pair-limit';
 
 describe('pairingLimitKey', () => {
@@ -28,6 +29,24 @@ describe('pairingLimitKey', () => {
 		expect(pairingLimitKey('')).toBe('unknown');
 		expect(pairingLimitKey('   ')).toBe('unknown');
 		expect(pairingLimitKey('not-an-ip')).toBe('unknown');
+	});
+});
+
+describe('sameKnownPairingNetwork', () => {
+	it('treats the same IPv4 address as one network', () => {
+		expect(sameKnownPairingNetwork('192.0.2.1', '192.0.2.1')).toBe(true);
+		expect(sameKnownPairingNetwork('192.0.2.1', '198.51.100.1')).toBe(false);
+	});
+
+	it('treats IPv6 addresses in the same /64 as one network', () => {
+		expect(sameKnownPairingNetwork('2001:db8:1:2::1', '2001:db8:1:2::ffff')).toBe(true);
+		expect(sameKnownPairingNetwork('2001:db8:1:2::1', '2001:db8:1:3::1')).toBe(false);
+	});
+
+	it('does not treat unknown addresses as a shared network', () => {
+		expect(sameKnownPairingNetwork('', '')).toBe(false);
+		expect(sameKnownPairingNetwork('not-an-ip', '')).toBe(false);
+		expect(sameKnownPairingNetwork('', '192.0.2.1')).toBe(false);
 	});
 });
 
