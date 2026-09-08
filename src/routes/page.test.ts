@@ -46,4 +46,10 @@ describe('home menu', () => {
 		expect(page).toContain('m.menu.language');
 		expect(en.menu.language).toBe('Language');
 	});
+
+	it('keeps channel row actions inside a table cell so separators stay aligned', () => {
+		expect(page).toContain('class="actions"');
+		expect(page).not.toMatch(/<td[^>]*class="actions"/);
+		expect(page).toMatch(/<td>\s*<div class="actions">/);
+	});
 });

@@ -826,18 +826,20 @@
 								</td>
 								<td><code>{channel.peerFingerprint}</code></td>
 								<td class="ip hide-ip">{channel.peerIp || m.common.unknown}</td>
-								<td class="actions">
-									<button
-										type="button"
-										class="icon danger"
-										aria-label={fill(m.home.deleteChannel, {
-											name: channel.peerName || channel.peerFingerprint
-										})}
-										onclick={() => removeChannel(channel)}
-									>
-										<Icon name="trash" size={18} />
-									</button>
-									<Icon name="chevron-right" size={18} />
+								<td>
+									<div class="actions">
+										<button
+											type="button"
+											class="icon danger"
+											aria-label={fill(m.home.deleteChannel, {
+												name: channel.peerName || channel.peerFingerprint
+											})}
+											onclick={() => removeChannel(channel)}
+										>
+											<Icon name="trash" size={18} />
+										</button>
+										<Icon name="chevron-right" size={18} />
+									</div>
 								</td>
 							</tr>
 						{/each}
@@ -1235,6 +1237,7 @@
 
 	.edit-row {
 		flex: 1;
+		width: 100%;
 	}
 
 	.edit-row input {
@@ -1316,6 +1319,7 @@
 
 	table {
 		width: 100%;
+		table-layout: fixed;
 		border-collapse: collapse;
 	}
 
@@ -1395,6 +1399,12 @@
 		font-family: var(--mono);
 		font-size: 13px;
 		color: var(--ink3);
+	}
+
+	th:last-child,
+	td:last-child {
+		width: 72px;
+		white-space: nowrap;
 	}
 
 	.actions {

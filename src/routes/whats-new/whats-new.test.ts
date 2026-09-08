@@ -16,6 +16,6 @@ describe('what’s new page', () => {
 
 	it('is backed by the shipped release list', () => {
 		expect(RELEASES[0]?.version).toBe(APP_VERSION);
-		expect(RELEASES[0]?.notes.join(' ')).toMatch(/network/i);
+		expect(RELEASES[0]?.notes.join(' ')).toMatch(/separator/i);
 	});
 });

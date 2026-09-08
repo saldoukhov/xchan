@@ -10,9 +10,14 @@ export type WhatsNew = {
 };
 
 /** Keep equal to package.json version. Newest release first. */
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 
 export const RELEASES: Release[] = [
+	{
+		version: '1.1.3',
+		date: '2026-09-08',
+		notes: ['Channel list separators stay in a straight line through the delete button.']
+	},
 	{
 		version: '1.1.2',
 		date: '2026-09-08',
