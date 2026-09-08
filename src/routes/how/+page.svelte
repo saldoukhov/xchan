@@ -83,8 +83,8 @@
 		</p>
 		<p>
 			If you can see both screens, compare them. If the other device is far away — yours, or someone
-			else’s — read the words on a call, or send the picture and the word list and ask them to
-			check.
+			else’s — copy the picture and the word list from the card and send them, or read the words on
+			a call.
 		</p>
 		<p>
 			The picture and words are not a secret, and they are not a recovery phrase. Showing them is

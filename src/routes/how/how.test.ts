@@ -14,6 +14,7 @@ describe('how it works page', () => {
 		);
 		expect(page).toContain('full 24-word list');
 		expect(page).toContain('The three words in the channel list are only a label.');
+		expect(page).toContain('copy the picture and the word list from the card');
 		expect(page).toContain('The picture and words are not a secret');
 		expect(page).toContain('not a recovery phrase');
 	});

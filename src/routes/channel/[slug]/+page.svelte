@@ -564,8 +564,11 @@
 			{/if}
 			<div class="compare-foot">
 				<p class="hint">
-					<span class="hint-long">Check both cards against the other device before you send.</span>
-					<span class="hint-short">Check both cards on the other device.</span>
+					<span class="hint-long"
+						>Check both cards against the other device before you send. Copy the picture and words
+						if you cannot see the other screen.</span
+					>
+					<span class="hint-short">Check or copy both cards.</span>
 				</p>
 				<button type="button" class="compare-btn" onclick={() => (compareOpen = !compareOpen)}>
 					<span class="compare-long">Compare All 24 Words</span>

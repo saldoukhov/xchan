@@ -16,6 +16,7 @@
 		| 'restart'
 		| 'schedule'
 		| 'send'
+		| 'share'
 		| 'trash'
 		| 'unfold-less'
 		| 'unfold-more'
@@ -72,6 +73,10 @@
 	{:else if name === 'send'}
 		<path d="M7 17 17 7" />
 		<path d="M8 7h9v9" />
+	{:else if name === 'share'}
+		<path d="M12 3v12" />
+		<path d="m8 7 4-4 4 4" />
+		<path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
 	{:else if name === 'help'}
 		<circle cx="12" cy="12" r="9" />
 		<path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />

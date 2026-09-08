@@ -16,7 +16,7 @@ Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(p
 3. While pairing, compare **Us** on one screen with **Them** on the other: LifeHash picture plus the 24-word grid.
 4. A channel appears. The list shows a LifeHash thumbnail and the first three words. Select the channel on both devices; when status is **ready**, send a short secret or attach a file (up to 50 MB). The other device saves the file automatically.
 
-If the cards do not match, delete the channel and pair again.
+If the other device is far away, copy the picture and the 24 words from a card and send them. If the cards do not match, delete the channel and pair again.
 
 The in-app **How it works** page (`/how`) is the same story for people who do not read GitHub: what to compare, what the relay can see, and a prompt you can paste into an agent to audit the source.
 

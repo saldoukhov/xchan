@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { onDestroy, onMount } from 'svelte';
+	import Icon from '$lib/Icon.svelte';
+	import { canShareIdentity, copyLifeHash, copyWords, shareIdentity } from '$lib/copy';
+
 	let {
 		title,
 		names = [],
@@ -17,6 +21,69 @@
 	const shownNames = $derived(names.map((name) => name.trim()).filter(Boolean));
 	const fingerprint = $derived(list.slice(0, 3).join(' '));
 	const primaryName = $derived(shownNames[0] ?? '');
+
+	let canShare = $state(false);
+	let pictureCopied = $state(false);
+	let pictureSaved = $state(false);
+	let wordsCopied = $state(false);
+	let pictureTimer: ReturnType<typeof setTimeout> | null = null;
+	let wordsTimer: ReturnType<typeof setTimeout> | null = null;
+
+	onMount(() => {
+		canShare = canShareIdentity();
+	});
+
+	onDestroy(() => {
+		if (pictureTimer) clearTimeout(pictureTimer);
+		if (wordsTimer) clearTimeout(wordsTimer);
+	});
+
+	function flash(kind: 'picture' | 'words', saved = false) {
+		if (kind === 'picture') {
+			pictureCopied = !saved;
+			pictureSaved = saved;
+			if (pictureTimer) clearTimeout(pictureTimer);
+			pictureTimer = setTimeout(() => {
+				pictureCopied = false;
+				pictureSaved = false;
+				pictureTimer = null;
+			}, 1500);
+		} else {
+			wordsCopied = true;
+			if (wordsTimer) clearTimeout(wordsTimer);
+			wordsTimer = setTimeout(() => {
+				wordsCopied = false;
+				wordsTimer = null;
+			}, 1500);
+		}
+	}
+
+	async function onCopyPicture() {
+		try {
+			const result = await copyLifeHash(lifeHash, title);
+			flash('picture', result === 'saved');
+		} catch {
+			pictureCopied = false;
+			pictureSaved = false;
+		}
+	}
+
+	async function onCopyWords() {
+		try {
+			await copyWords(words);
+			flash('words');
+		} catch {
+			wordsCopied = false;
+		}
+	}
+
+	async function onShare() {
+		try {
+			await shareIdentity({ title, words, lifeHash });
+		} catch {
+			// Share is best-effort; copy buttons remain.
+		}
+	}
 </script>
 
 {#if variant === 'row'}
@@ -49,6 +116,36 @@
 					<li><span class="n">{i + 1}</span> {word}</li>
 				{/each}
 			</ol>
+		</div>
+		<div class="actions">
+			<button
+				type="button"
+				class="ghost"
+				onclick={onCopyPicture}
+				aria-label={pictureCopied
+					? 'Picture copied'
+					: pictureSaved
+						? 'Picture saved'
+						: 'Copy picture'}
+			>
+				<Icon name={pictureCopied || pictureSaved ? 'check' : 'copy'} size={14} />
+				{pictureCopied ? 'Copied' : pictureSaved ? 'Saved' : 'Copy picture'}
+			</button>
+			<button
+				type="button"
+				class="ghost"
+				onclick={onCopyWords}
+				aria-label={wordsCopied ? 'Words copied' : 'Copy words'}
+			>
+				<Icon name={wordsCopied ? 'check' : 'copy'} size={14} />
+				{wordsCopied ? 'Copied' : 'Copy words'}
+			</button>
+			{#if canShare}
+				<button type="button" class="ghost" onclick={onShare} aria-label="Share picture and words">
+					<Icon name="share" size={14} />
+					Share
+				</button>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -155,6 +252,7 @@
 		font-size: 12px;
 		line-height: 1.45;
 		color: var(--ink);
+		user-select: text;
 	}
 
 	.grid li {
@@ -164,6 +262,18 @@
 	.n {
 		color: var(--ink3);
 		font-size: 10px;
+	}
+
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.actions button {
+		height: 32px;
+		padding: 0 12px;
+		font-size: 13px;
 	}
 
 	@media (max-width: 720px) {
