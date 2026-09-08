@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { canShareIdentity, copyLifeHash, copyWords, shareIdentity } from '$lib/copy';
+	import { i18n } from '$lib/i18n.svelte';
 
 	let {
 		title,
@@ -123,27 +124,31 @@
 				class="ghost"
 				onclick={onCopyPicture}
 				aria-label={pictureCopied
-					? 'Picture copied'
+					? i18n.m.card.pictureCopied
 					: pictureSaved
-						? 'Picture saved'
-						: 'Copy picture'}
+						? i18n.m.card.pictureSaved
+						: i18n.m.card.copyPicture}
 			>
 				<Icon name={pictureCopied || pictureSaved ? 'check' : 'copy'} size={14} />
-				{pictureCopied ? 'Copied' : pictureSaved ? 'Saved' : 'Copy picture'}
+				{pictureCopied
+					? i18n.m.common.copied
+					: pictureSaved
+						? i18n.m.common.saved
+						: i18n.m.card.copyPicture}
 			</button>
 			<button
 				type="button"
 				class="ghost"
 				onclick={onCopyWords}
-				aria-label={wordsCopied ? 'Words copied' : 'Copy words'}
+				aria-label={wordsCopied ? i18n.m.card.wordsCopied : i18n.m.card.copyWords}
 			>
 				<Icon name={wordsCopied ? 'check' : 'copy'} size={14} />
-				{wordsCopied ? 'Copied' : 'Copy words'}
+				{wordsCopied ? i18n.m.common.copied : i18n.m.card.copyWords}
 			</button>
 			{#if canShare}
-				<button type="button" class="ghost" onclick={onShare} aria-label="Share picture and words">
+				<button type="button" class="ghost" onclick={onShare} aria-label={i18n.m.card.shareAria}>
 					<Icon name="share" size={14} />
-					Share
+					{i18n.m.card.share}
 				</button>
 			{/if}
 		</div>

@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import Icon from '$lib/Icon.svelte';
+	import RichText from '$lib/RichText.svelte';
+	import { fill, i18n } from '$lib/i18n.svelte';
+	import { PAIRING_SECONDS } from '$lib/pairing';
 
 	const github = 'https://github.com/saldoukhov/xchan';
 	const scorecard = 'https://scorecard.dev/viewer/?uri=github.com/saldoukhov/xchan';
-	const prompt =
-		'Review https://github.com/saldoukhov/xchan. Can the server read the messages or files I send? Can pairing connect me to a stranger if I skip comparing the picture and the 24-word list? If I do compare them on both devices, can a stranger still join?';
+	const m = $derived(i18n.m);
 
 	let copied = $state(false);
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
 	async function copyPrompt() {
 		try {
-			await navigator.clipboard.writeText(prompt);
+			await navigator.clipboard.writeText(m.how.prompt);
 			copied = true;
 			if (copyTimer) clearTimeout(copyTimer);
 			copyTimer = setTimeout(() => {
@@ -26,156 +28,130 @@
 </script>
 
 <svelte:head>
-	<title>How XChan works</title>
-	<meta
-		name="description"
-		content="How XChan pairs two devices, what the server can see, and how to check the code yourself."
-	/>
+	<title>{m.meta.howTitle}</title>
+	<meta name="description" content={m.meta.howDescription} />
 </svelte:head>
 
 <main>
 	<header class="top">
-		<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+		<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 			<Icon name="back" size={20} />
 		</a>
 		<div class="intro">
-			<h1>How it works</h1>
+			<h1>{m.how.title}</h1>
 			<p class="lede">
-				Pair two devices and send a message or a file. A password onto a new machine, a photo from
-				your phone to finish on a computer, a note between work and home, or something for a friend
-				or family member.
+				{m.how.lede1}
 			</p>
 			<p class="lede">
-				Keep a channel for years if you need it. Pairing a new one still takes 15 seconds. After you
-				leave the page, the message is gone from this app.
+				{fill(m.how.lede2, { seconds: PAIRING_SECONDS })}
 			</p>
 		</div>
 	</header>
 
 	<section>
-		<h2>Pair, then send</h2>
+		<h2>{m.how.pairTitle}</h2>
 		<ol>
-			<li>Open XChan on both devices. You can install it from the browser if you want.</li>
-			<li>Optionally name this device — MacBook, Pixel, and so on.</li>
-			<li>Press <strong>Pair</strong> on both within 15 seconds.</li>
-			<li>
-				Compare the picture and the 24-word list. <strong>Us</strong> on one screen should match
-				<strong>Them</strong> on the other.
-			</li>
+			<li>{m.how.step1}</li>
+			<li>{m.how.step2}</li>
+			<li><RichText text={fill(m.how.step3, { seconds: PAIRING_SECONDS })} /></li>
+			<li><RichText text={m.how.step4} /></li>
 		</ol>
 		<p class="warn">
-			If the picture or the words do not match, delete the channel and pair again. Do not send.
+			{m.how.warn}
 		</p>
 		<ol class="cont">
-			<li>
-				Open the same channel on both devices. When status is <strong>Ready</strong>, send text or a
-				file (up to 50 MB). The other device saves the file automatically.
-			</li>
+			<li><RichText text={m.how.step5} /></li>
 		</ol>
 	</section>
 
 	<section id="check">
-		<h2>Why the picture and words matter</h2>
+		<h2>{m.how.checkTitle}</h2>
 		<p>
-			On the public site, anyone can press Pair at the same moment, and the next two devices are
-			matched. The picture (a LifeHash) and the full 24-word list are how you confirm you connected
-			to the device you meant — not a stranger.
+			{m.how.check1}
 		</p>
 		<p>
-			If you can see both screens, compare them. If the other device is far away — yours, or someone
-			else’s — copy the picture and the word list from the card and send them, or read the words on
-			a call.
+			{m.how.check2}
 		</p>
 		<p>
-			The picture and words are not a secret, and they are not a recovery phrase. Showing them is
-			how the check works. They do not unlock the channel.
+			{m.how.check3}
 		</p>
 		<p>
-			The three words in the channel list are only a label. The real check is the picture plus all
-			24 words, before you send.
+			{m.how.check4}
 		</p>
 	</section>
 
 	<section>
-		<h2>Where your secret lives</h2>
+		<h2>{m.how.secretTitle}</h2>
 		<div class="split">
 			<div>
-				<h3>On this device</h3>
+				<h3>{m.how.onDeviceTitle}</h3>
 				<ul>
-					<li>The keys for this device and its channels stay in this browser.</li>
-					<li>Text and files are shown only while the channel page is open.</li>
+					<li>{m.how.onDevice1}</li>
+					<li>{m.how.onDevice2}</li>
 					<li>
-						Clearing site data, resetting, or switching browsers destroys the keys. Other devices
-						keep their own.
+						{m.how.onDevice3}
 					</li>
 					<li>
-						If you install the app, you can turn off automatic updates in the menu. A banner on the
-						home screen tells you when a new version is waiting, with a link to What’s new. This
-						device keeps the current client until you tap Update.
+						{m.how.onDevice4}
 					</li>
 				</ul>
 			</div>
 			<div>
-				<h3>On the server</h3>
+				<h3>{m.how.onServerTitle}</h3>
 				<ul>
-					<li>The server is a relay. It passes encrypted data, then forgets it.</li>
-					<li>It can see that two devices paired, the encrypted blobs, and IP addresses.</li>
-					<li>It cannot read names, message text, or file contents.</li>
+					<li>{m.how.onServer1}</li>
+					<li>{m.how.onServer2}</li>
+					<li>{m.how.onServer3}</li>
 				</ul>
 			</div>
 		</div>
 		<p>
-			If you want pairing that is not shared with everyone else on this site, you can run your own
-			copy from the public repository.
+			{m.how.selfHost}
 		</p>
 	</section>
 
 	<section>
-		<h2>Why you can trust this</h2>
+		<h2>{m.how.trustTitle}</h2>
 		<p>
-			A public GitHub repository and an OpenSSF badge help people who already read source code. This
-			page is for everyone else.
+			{m.how.trustIntro}
 		</p>
 		<ul class="trust">
 			<li>
-				<strong>You check the other device yourself.</strong>
-				The picture and 24 words are the safety step. The site does not do this check for you.
+				<strong>{m.how.trustCheckTitle}</strong>
+				{m.how.trustCheckBody}
 			</li>
 			<li>
-				<strong>The code is public and has been audited.</strong>
-				Anyone can read it, and anyone can audit it again — including with an AI agent. You do not have
-				to be a programmer.
+				<strong>{m.how.trustCodeTitle}</strong>
+				{m.how.trustCodeBody}
 			</li>
 			<li>
-				<strong>The project is small on purpose.</strong>
-				There are no accounts, no database, and no ads. With no user data sitting on a server, there is
-				less incentive to hack it.
+				<strong>{m.how.trustSmallTitle}</strong>
+				{m.how.trustSmallBody}
 			</li>
 			<li>
-				<strong>You can pin the client on this device.</strong>
-				Automatic updates are on by default. Turn them off after you install the app if you do not want
-				a compromised host to quietly replace the copy you already have.
+				<strong>{m.how.trustPinTitle}</strong>
+				{m.how.trustPinBody}
 			</li>
 		</ul>
-		<p>Paste this into any coding agent:</p>
+		<p>{m.how.pastePrompt}</p>
 		<div class="prompt">
-			<pre>{prompt}</pre>
+			<pre>{m.how.prompt}</pre>
 			<button type="button" class="ghost" onclick={copyPrompt}>
 				<Icon name={copied ? 'check' : 'copy'} size={16} />
-				{copied ? 'Copied' : 'Copy'}
+				{copied ? m.common.copied : m.common.copy}
 			</button>
 		</div>
 		<p class="out">
-			<a href={github} target="_blank" rel="noreferrer">Source on GitHub</a>
+			<a href={github} target="_blank" rel="noreferrer">{m.how.sourceGithub}</a>
 			<span aria-hidden="true">·</span>
-			<a href={scorecard} target="_blank" rel="noreferrer">OpenSSF Scorecard</a>
+			<a href={scorecard} target="_blank" rel="noreferrer">{m.how.scorecard}</a>
 		</p>
 	</section>
 
 	<p class="foot">
-		<a href={resolve('/')}>Back to pairing</a>
+		<a href={resolve('/')}>{m.common.backToPairing}</a>
 		<span aria-hidden="true"> · </span>
-		<a href={resolve('/whats-new')}>What’s new</a>
+		<a href={resolve('/whats-new')}>{m.common.whatsNew}</a>
 	</p>
 </main>
 

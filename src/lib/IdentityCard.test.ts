@@ -9,11 +9,10 @@ describe('IdentityCard copy actions', () => {
 		expect(source).toContain('copyLifeHash');
 		expect(source).toContain('copyWords');
 		expect(source).toContain('shareIdentity');
-		expect(source).toContain('Copy picture');
-		expect(source).toContain('Copy words');
-		expect(source).toContain('Share');
-		expect(source).toContain('Picture copied');
-		expect(source).toContain('Copy picture');
-		expect(source).toContain("aria-label={wordsCopied ? 'Words copied' : 'Copy words'}");
+		expect(source).toContain('i18n.m.card.copyPicture');
+		expect(source).toContain('i18n.m.card.copyWords');
+		expect(source).toContain('i18n.m.card.share');
+		expect(source).toContain('i18n.m.card.pictureCopied');
+		expect(source).toContain('i18n.m.card.wordsCopied');
 	});
 });

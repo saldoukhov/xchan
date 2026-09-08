@@ -16,8 +16,18 @@
 	import { deleteChannel, listChannels, putChannel } from '$lib/db';
 	import IdentityCard from '$lib/IdentityCard.svelte';
 	import Icon from '$lib/Icon.svelte';
+	import {
+		LOCALE_LABELS,
+		LOCALES,
+		applyLocale,
+		fill,
+		i18n,
+		translateRelayMessage,
+		type Locale
+	} from '$lib/i18n.svelte';
 	import { sanitizeName } from '$lib/name';
 	import { PAIRING_SECONDS } from '$lib/pairing';
+	import { APP_VERSION } from '$lib/releases';
 	import { themeState, toggleTheme } from '$lib/theme.svelte';
 	import {
 		applyWaitingUpdate,
@@ -49,7 +59,9 @@
 
 	let resetDialog = $state<HTMLDialogElement | undefined>(undefined);
 	let menuOpen = $state(false);
+	let menuPanel = $state<'main' | 'language'>('main');
 	let menuWrap = $state<HTMLDivElement | undefined>(undefined);
+	const m = $derived(i18n.m);
 
 	let pairAbort: AbortController | null = null;
 	let pairIgnoreErrors = false;
@@ -61,7 +73,7 @@
 				endpoint = await loadOrCreateEndpoint();
 				channels = await listChannels();
 			} catch (err) {
-				loadError = err instanceof Error ? err.message : 'Could not load this device';
+				loadError = err instanceof Error ? err.message : i18n.m.home.loadError;
 			}
 		})();
 		void loadSelfIp();
@@ -163,18 +175,18 @@
 				(await commitOfPairing(payload.peerPublicKey, payload.peerIdentityPublicKey)) !== peerCommit
 			) {
 				stopPairing(true);
-				pairingNote = 'Peer key did not match the commit. Pairing aborted.';
+				pairingNote = i18n.m.pair.commitMismatch;
 				return;
 			}
 			if (!endpoint) {
 				pairing = false;
 				pairingOffer = null;
-				pairingNote = 'Paired, but could not open the channel.';
+				pairingNote = i18n.m.pair.pairedButFailed;
 				return;
 			}
 			if (payload.peerIdentityPublicKey === endpoint.identityPublicKey) {
 				stopPairing(true);
-				pairingNote = 'This browser is already pairing. Use another browser or device.';
+				pairingNote = i18n.m.pair.sameDevice;
 				return;
 			}
 			const peerRaw = base64ToBytes(payload.peerPublicKey);
@@ -207,7 +219,7 @@
 		} catch {
 			pairing = false;
 			pairingOffer = null;
-			pairingNote = 'Paired, but could not open the channel.';
+			pairingNote = i18n.m.pair.pairedButFailed;
 		}
 	}
 
@@ -223,7 +235,7 @@
 			offer = await createPairingOffer(endpoint.identityPublicKey);
 		} catch {
 			pairing = false;
-			pairingNote = 'Could not create a pairing key.';
+			pairingNote = i18n.m.pair.createFailed;
 			return;
 		}
 		pairingOffer = offer;
@@ -234,7 +246,7 @@
 			pairingSeconds = Math.max(0, pairingSeconds - 1);
 			if (pairingSeconds === 0) {
 				stopPairing(true);
-				pairingNote = 'Pairing timed out. Try again with both devices.';
+				pairingNote = i18n.m.pair.timedOut;
 			}
 		}, 1000);
 		try {
@@ -245,19 +257,19 @@
 			if (!response.ok) {
 				const text = (await response.text()).trim();
 				stopPairing(false);
-				pairingNote = text || 'Could not start pairing.';
+				pairingNote = text ? translateRelayMessage(text, i18n.m) : i18n.m.pair.startFailed;
 				return;
 			}
 			if (!response.body) {
 				stopPairing(false);
-				pairingNote = 'Pairing connection dropped.';
+				pairingNote = i18n.m.pair.dropped;
 				return;
 			}
 			await readPairEvents(response.body, controller.signal, (payload) => {
 				if (payload.type === 'waiting') return;
 				if (payload.type === 'timeout') {
 					stopPairing(false);
-					pairingNote = 'Pairing timed out. Try again with both devices.';
+					pairingNote = i18n.m.pair.timedOut;
 					return;
 				}
 				if (payload.type === 'cancelled') {
@@ -267,9 +279,7 @@
 				if (payload.type === 'rejected') {
 					stopPairing(false);
 					pairingNote =
-						payload.reason === 'same-device'
-							? 'This browser is already pairing. Use another browser or device.'
-							: 'Pairing was rejected.';
+						payload.reason === 'same-device' ? i18n.m.pair.sameDevice : i18n.m.pair.rejected;
 					return;
 				}
 				if (payload.type === 'reveal') {
@@ -285,7 +295,7 @@
 					}).then(async (res) => {
 						if (!res.ok && pairing) {
 							stopPairing(true);
-							pairingNote = 'Could not reveal pairing key.';
+							pairingNote = i18n.m.pair.revealFailed;
 						}
 					});
 					return;
@@ -298,14 +308,14 @@
 			});
 			if (!pairIgnoreErrors && pairing) {
 				stopPairing(false);
-				pairingNote = 'Pairing connection dropped.';
+				pairingNote = i18n.m.pair.dropped;
 			}
 		} catch (err) {
 			if (pairIgnoreErrors) return;
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			if (!pairing) return;
 			stopPairing(false);
-			pairingNote = 'Pairing connection dropped.';
+			pairingNote = i18n.m.pair.dropped;
 		}
 	}
 
@@ -390,10 +400,17 @@
 
 	function openMenu() {
 		menuOpen = !menuOpen;
+		if (!menuOpen) menuPanel = 'main';
 	}
 
 	function closeMenu() {
 		menuOpen = false;
+		menuPanel = 'main';
+	}
+
+	function selectLocale(locale: Locale) {
+		applyLocale(locale);
+		closeMenu();
 	}
 
 	function onWindowPointerDown(event: PointerEvent) {
@@ -443,7 +460,7 @@
 			loadError = '';
 			closeReset();
 		} catch (err) {
-			loadError = err instanceof Error ? err.message : 'Could not reset this device';
+			loadError = err instanceof Error ? err.message : i18n.m.home.resetError;
 			closeReset();
 		} finally {
 			resetting = false;
@@ -453,20 +470,30 @@
 
 <svelte:head>
 	<title>XChan</title>
+	<meta name="description" content={m.meta.description} />
 </svelte:head>
 
 <svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} />
 
 <main>
 	<header class="top">
-		<h1><span class="mark">X</span>Chan</h1>
+		<h1>
+			<span class="mark">X</span>Chan
+			<a
+				class="ver"
+				href={resolve('/whats-new')}
+				aria-label={fill(m.home.versionAria, { version: APP_VERSION })}
+			>
+				{APP_VERSION}
+			</a>
+		</h1>
 		<div class="top-actions">
-			<a class="how-link" href={resolve('/how')} aria-label="How it works">
+			<a class="how-link" href={resolve('/how')} aria-label={m.common.howItWorks}>
 				<Icon name="help" size={18} />
-				<span class="how-text">How it works</span>
+				<span class="how-text">{m.common.howItWorks}</span>
 			</a>
 			<div class="vdiv" aria-hidden="true"></div>
-			<nav class="outlinks" aria-label="XChan elsewhere">
+			<nav class="outlinks" aria-label={m.home.elsewhere}>
 				<a
 					class="icon"
 					href="https://github.com/saldoukhov/xchan"
@@ -491,7 +518,7 @@
 				<button
 					type="button"
 					class="icon outlined"
-					aria-label="More"
+					aria-label={m.menu.more}
 					aria-haspopup="menu"
 					aria-expanded={menuOpen}
 					onclick={openMenu}
@@ -500,87 +527,124 @@
 				</button>
 				{#if menuOpen}
 					<div class="menu" role="menu">
-						<button
-							type="button"
-							class="menu-item"
-							role="menuitemcheckbox"
-							aria-checked={themeState.theme === 'dark'}
-							onclick={toggleTheme}
-						>
-							<Icon name="moon" size={18} />
-							<span class="menu-label">Dark Theme</span>
-							<span class="switch" class:on={themeState.theme === 'dark'}
-								><span class="knob"></span></span
+						{#if menuPanel === 'language'}
+							<button
+								type="button"
+								class="menu-item"
+								role="menuitem"
+								onclick={() => (menuPanel = 'main')}
 							>
-						</button>
-						{#if updateState.supported}
+								<Icon name="back" size={18} />
+								<span class="menu-label">{m.menu.language}</span>
+							</button>
+							<div class="menu-rule"></div>
+							{#each LOCALES as locale (locale)}
+								<button
+									type="button"
+									class="menu-item"
+									role="menuitemradio"
+									aria-checked={i18n.locale === locale}
+									onclick={() => selectLocale(locale)}
+								>
+									<span class="menu-label">{LOCALE_LABELS[locale]}</span>
+									{#if i18n.locale === locale}
+										<Icon name="check" size={18} />
+									{/if}
+								</button>
+							{/each}
+						{:else}
 							<button
 								type="button"
 								class="menu-item"
 								role="menuitemcheckbox"
-								aria-checked={updateState.autoUpdate}
-								title="When off, this device keeps the current app until you choose to update"
-								onclick={() => void toggleAutoUpdate()}
+								aria-checked={themeState.theme === 'dark'}
+								onclick={toggleTheme}
 							>
-								<Icon name="cloud" size={18} />
-								<span class="menu-label">Automatically update</span>
-								<span class="switch" class:on={updateState.autoUpdate}
+								<Icon name="moon" size={18} />
+								<span class="menu-label">{m.menu.darkTheme}</span>
+								<span class="switch" class:on={themeState.theme === 'dark'}
 									><span class="knob"></span></span
 								>
 							</button>
-							{#if !updateState.autoUpdate}
+							<button
+								type="button"
+								class="menu-item"
+								role="menuitem"
+								onclick={() => (menuPanel = 'language')}
+							>
+								<Icon name="globe" size={18} />
+								<span class="menu-label">{m.menu.language}</span>
+								<span class="menu-value">{LOCALE_LABELS[i18n.locale]}</span>
+							</button>
+							{#if updateState.supported}
 								<button
 									type="button"
 									class="menu-item"
-									role="menuitem"
-									disabled={updateState.checking}
-									onclick={() => {
-										void checkForUpdate().then(() => {
-											if (updateState.updateAvailable) closeMenu();
-										});
-									}}
+									role="menuitemcheckbox"
+									aria-checked={updateState.autoUpdate}
+									title={m.menu.autoUpdateHint}
+									onclick={() => void toggleAutoUpdate()}
 								>
-									<Icon name="download" size={18} />
-									<span class="menu-label">
-										{#if updateState.checking}
-											Checking…
-										{:else if updateState.checkResult === 'current'}
-											No update
-										{:else}
-											Check for update
-										{/if}
-									</span>
+									<Icon name="cloud" size={18} />
+									<span class="menu-label">{m.menu.autoUpdate}</span>
+									<span class="switch" class:on={updateState.autoUpdate}
+										><span class="knob"></span></span
+									>
 								</button>
+								{#if !updateState.autoUpdate}
+									<button
+										type="button"
+										class="menu-item"
+										role="menuitem"
+										disabled={updateState.checking}
+										onclick={() => {
+											void checkForUpdate().then(() => {
+												if (updateState.updateAvailable) closeMenu();
+											});
+										}}
+									>
+										<Icon name="download" size={18} />
+										<span class="menu-label">
+											{#if updateState.checking}
+												{m.menu.checking}
+											{:else if updateState.checkResult === 'current'}
+												{m.menu.noUpdate}
+											{:else}
+												{m.menu.checkForUpdate}
+											{/if}
+										</span>
+									</button>
+								{/if}
 							{/if}
+							<div class="menu-rule"></div>
+							<button type="button" class="menu-item danger" role="menuitem" onclick={openReset}>
+								<Icon name="restart" size={18} />
+								{m.menu.reset}
+							</button>
 						{/if}
-						<div class="menu-rule"></div>
-						<button type="button" class="menu-item danger" role="menuitem" onclick={openReset}>
-							<Icon name="restart" size={18} />
-							Reset
-						</button>
 					</div>
 				{/if}
 			</div>
 		</div>
 		<p class="lede">
-			Pair two devices and send an ephemeral secret or file. The server only relays.
+			{m.home.lede}
 		</p>
 	</header>
 
 	{#if updateState.updateAvailable}
 		<section class="update-banner" role="status">
 			<div class="update-copy">
-				<h2>New version</h2>
+				<h2>{m.home.newVersion}</h2>
 				<p>
-					A new version is on the server. This device will keep the current app until you update.
+					{m.home.updateBanner}
 				</p>
 				<p class="update-link">
-					<a href={resolve('/whats-new')}>What’s new</a>
+					<a href={resolve('/whats-new')}>{m.common.whatsNew}</a>
 				</p>
 			</div>
 			<div class="row">
-				<button type="button" class="ghost" onclick={dismissUpdate}>Later</button>
-				<button type="button" onclick={applyWaitingUpdate}>Update</button>
+				<button type="button" class="ghost" onclick={dismissUpdate}>{m.home.later}</button>
+				<button type="button" onclick={applyWaitingUpdate}>{m.home.update}</button>
 			</div>
 		</section>
 	{/if}
@@ -588,63 +652,75 @@
 	{#if loadError}
 		<p class="error">{loadError}</p>
 	{:else if !endpoint}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m.common.loading}</p>
 	{:else}
 		<section class="endpoint">
-			<h2>This endpoint</h2>
+			<h2>{m.home.thisEndpoint}</h2>
 			<div class="endpoint-grid">
 				<div class="fact">
-					<span class="label">Name</span>
+					<span class="label">{m.home.name}</span>
 					{#if editingName}
 						<div class="edit-row">
 							<input
 								bind:this={nameInput}
 								type="text"
 								maxlength="64"
-								placeholder="MacBook, Pixel…"
+								placeholder={m.home.namePlaceholder}
 								bind:value={nameDraft}
 								onkeydown={onNameKeydown}
 							/>
-							<button type="button" class="icon" aria-label="Save name" onclick={saveName}>
+							<button type="button" class="icon" aria-label={m.home.saveName} onclick={saveName}>
 								<Icon name="check" size={16} />
 							</button>
-							<button type="button" class="icon" aria-label="Cancel" onclick={cancelEditName}>
+							<button
+								type="button"
+								class="icon"
+								aria-label={m.common.cancel}
+								onclick={cancelEditName}
+							>
 								<Icon name="close" size={16} />
 							</button>
 						</div>
 					{:else}
 						<div class="display-row">
-							<span class={endpoint.name ? 'value' : 'muted'}>{endpoint.name || 'Unnamed'}</span>
-							<button type="button" class="icon" aria-label="Edit name" onclick={startEditName}>
+							<span class={endpoint.name ? 'value' : 'muted'}
+								>{endpoint.name || m.common.unnamed}</span
+							>
+							<button
+								type="button"
+								class="icon"
+								aria-label={m.home.editName}
+								onclick={startEditName}
+							>
 								<Icon name="pencil" size={16} />
 							</button>
 						</div>
 					{/if}
 				</div>
 				<div class="fact">
-					<span class="label">IP</span>
+					<span class="label">{m.home.ip}</span>
 					<span class={selfIp ? 'value endpoint-ip' : 'muted'} title={selfIp || undefined}
-						>{selfIp || 'unknown'}</span
+						>{selfIp || m.common.unknown}</span
 					>
 				</div>
 				{#if pairing}
 					<button type="button" class="pair-btn cancel" onclick={() => stopPairing(true)}>
-						<span>Cancel</span>
+						<span>{m.common.cancel}</span>
 						<strong>{pairingSeconds}s</strong>
 					</button>
 				{:else}
-					<button type="button" class="pair-btn" onclick={startPairing}>Pair</button>
+					<button type="button" class="pair-btn" onclick={startPairing}>{m.home.pair}</button>
 				{/if}
 			</div>
 			<p class="hint clock">
 				<Icon name="schedule" size={16} />
-				Press Pair on both devices within 15 seconds.
+				{fill(m.home.pairingHint, { seconds: PAIRING_SECONDS })}
 			</p>
 			{#if pairingOffer}
 				<div class="pair-card">
 					<IdentityCard
-						title="Us"
-						names={[endpoint.name || 'Unnamed']}
+						title={m.common.us}
+						names={[endpoint.name || m.common.unnamed]}
 						lifeHash={pairingOffer.identity.lifeHash}
 						words={pairingOffer.identity.words}
 					/>
@@ -658,28 +734,27 @@
 		{#if channels.length === 0}
 			<section class="channels-empty">
 				<div class="section-head">
-					<h2>Channels</h2>
+					<h2>{m.home.channels}</h2>
 					<span class="count">0</span>
 				</div>
 				<p class="empty">
-					No pairings yet. Open this app on another device and press Pair on both within 15 seconds.
-					Compare LifeHash and the word grid before sending.
+					{fill(m.home.empty, { seconds: PAIRING_SECONDS })}
 				</p>
 			</section>
 		{:else}
 			<section class="channels-desktop">
 				<div class="section-head">
-					<h2>Channels</h2>
+					<h2>{m.home.channels}</h2>
 					<span class="count">{channels.length}</span>
 				</div>
 				<table>
 					<thead>
 						<tr>
-							<th>Peer</th>
-							<th>Alias</th>
-							<th>Fingerprint</th>
-							<th class="hide-ip">IP</th>
-							<th><span class="sr-only">Actions</span></th>
+							<th>{m.home.tablePeer}</th>
+							<th>{m.home.tableAlias}</th>
+							<th>{m.home.tableFingerprint}</th>
+							<th class="hide-ip">{m.home.tableIp}</th>
+							<th><span class="sr-only">{m.home.tableActions}</span></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -699,7 +774,7 @@
 											alt=""
 										/>
 										<a class="row-link" href={channelPath(channel)}
-											>{channel.peerName || 'Unnamed endpoint'}</a
+											>{channel.peerName || m.common.unnamedEndpoint}</a
 										>
 									</div>
 								</td>
@@ -710,14 +785,14 @@
 												bind:this={aliasInput}
 												type="text"
 												maxlength="64"
-												placeholder="optional"
+												placeholder={m.common.optional}
 												bind:value={aliasDraft}
 												onkeydown={(event) => onAliasKeydown(channel, event)}
 											/>
 											<button
 												type="button"
 												class="icon"
-												aria-label="Save alias"
+												aria-label={m.home.saveAlias}
 												onclick={() => saveAlias(channel)}
 											>
 												<Icon name="check" size={16} />
@@ -725,7 +800,7 @@
 											<button
 												type="button"
 												class="icon"
-												aria-label="Cancel"
+												aria-label={m.common.cancel}
 												onclick={cancelEditAlias}
 											>
 												<Icon name="close" size={16} />
@@ -739,7 +814,9 @@
 											<button
 												type="button"
 												class="icon"
-												aria-label="Edit alias for {channel.peerName || 'peer'}"
+												aria-label={fill(m.home.editAlias, {
+													name: channel.peerName || m.common.peer
+												})}
 												onclick={() => startEditAlias(channel)}
 											>
 												<Icon name="pencil" size={15} />
@@ -748,12 +825,14 @@
 									{/if}
 								</td>
 								<td><code>{channel.peerFingerprint}</code></td>
-								<td class="ip hide-ip">{channel.peerIp || 'unknown'}</td>
+								<td class="ip hide-ip">{channel.peerIp || m.common.unknown}</td>
 								<td class="actions">
 									<button
 										type="button"
 										class="icon danger"
-										aria-label="Delete {channel.peerName || channel.peerFingerprint}"
+										aria-label={fill(m.home.deleteChannel, {
+											name: channel.peerName || channel.peerFingerprint
+										})}
 										onclick={() => removeChannel(channel)}
 									>
 										<Icon name="trash" size={18} />
@@ -768,7 +847,7 @@
 
 			<div class="channels-mobile">
 				<div class="section-head">
-					<h2>Channels</h2>
+					<h2>{m.home.channels}</h2>
 					<span class="count">{channels.length}</span>
 				</div>
 				<div class="mobile-list">
@@ -789,7 +868,7 @@
 							<div class="mobile-meta">
 								<div class="mobile-names">
 									<a class="row-link" href={channelPath(channel)}
-										>{channel.peerName || 'Unnamed endpoint'}</a
+										>{channel.peerName || m.common.unnamedEndpoint}</a
 									>
 									{#if editingAliasKey === channel.peerIdentityPublicKey}
 										<div class="edit-row">
@@ -797,14 +876,14 @@
 												bind:this={aliasInput}
 												type="text"
 												maxlength="64"
-												placeholder="optional"
+												placeholder={m.common.optional}
 												bind:value={aliasDraft}
 												onkeydown={(event) => onAliasKeydown(channel, event)}
 											/>
 											<button
 												type="button"
 												class="icon"
-												aria-label="Save alias"
+												aria-label={m.home.saveAlias}
 												onclick={() => saveAlias(channel)}
 											>
 												<Icon name="check" size={16} />
@@ -812,7 +891,7 @@
 											<button
 												type="button"
 												class="icon"
-												aria-label="Cancel"
+												aria-label={m.common.cancel}
 												onclick={cancelEditAlias}
 											>
 												<Icon name="close" size={16} />
@@ -822,21 +901,25 @@
 										<button
 											type="button"
 											class="alias-btn"
-											aria-label="Edit alias for {channel.peerName || 'peer'}"
+											aria-label={fill(m.home.editAlias, {
+												name: channel.peerName || m.common.peer
+											})}
 											onclick={() => startEditAlias(channel)}
 										>
-											{channel.localAlias || 'Add alias'}
+											{channel.localAlias || m.home.addAlias}
 										</button>
 									{/if}
 								</div>
 								<div class="fp-plain">{channel.peerFingerprint}</div>
-								<div class="ip">{channel.peerIp || 'unknown'}</div>
+								<div class="ip">{channel.peerIp || m.common.unknown}</div>
 							</div>
 							<div class="mobile-actions">
 								<button
 									type="button"
 									class="icon danger"
-									aria-label="Delete {channel.peerName || channel.peerFingerprint}"
+									aria-label={fill(m.home.deleteChannel, {
+										name: channel.peerName || channel.peerFingerprint
+									})}
 									onclick={() => removeChannel(channel)}
 								>
 									<Icon name="trash" size={18} />
@@ -851,24 +934,25 @@
 	{/if}
 
 	<p class="foot">
-		<a href={resolve('/how')}>How it works</a>
+		<a href={resolve('/how')}>{m.common.howItWorks}</a>
 		<span aria-hidden="true"> · </span>
-		<a href={resolve('/whats-new')}>What’s new</a>
+		<a href={resolve('/whats-new')}>{m.common.whatsNew}</a>
 		<span aria-hidden="true"> · </span>
-		Channel keys live on this device only. Clearing site data destroys them.
+		{m.home.footerKeys}
 	</p>
 </main>
 
 <dialog bind:this={resetDialog} aria-labelledby="reset-title" onclick={onResetDialogClick}>
-	<h3 id="reset-title">Reset this device?</h3>
+	<h3 id="reset-title">{m.home.resetTitle}</h3>
 	<p>
-		This deletes the name and every channel stored in this browser. You cannot undo it. Other
-		devices keep their own keys.
+		{m.home.resetBody}
 	</p>
 	<div class="row">
-		<button type="button" class="ghost" onclick={closeReset} disabled={resetting}>Cancel</button>
+		<button type="button" class="ghost" onclick={closeReset} disabled={resetting}
+			>{m.common.cancel}</button
+		>
 		<button type="button" class="danger fill" onclick={confirmReset} disabled={resetting}>
-			{resetting ? 'Resetting…' : 'Reset everything'}
+			{resetting ? m.home.resetting : m.home.resetEverything}
 		</button>
 	</div>
 </dialog>
@@ -880,6 +964,24 @@
 		align-items: flex-start;
 		column-gap: 24px;
 		row-gap: 6px;
+	}
+
+	h1 {
+		white-space: nowrap;
+	}
+
+	.ver {
+		margin-left: 0.4em;
+		font-size: 13px;
+		font-weight: 500;
+		letter-spacing: 0;
+		font-variant-numeric: tabular-nums;
+		color: var(--ink3);
+		text-decoration: none;
+	}
+
+	.ver:hover {
+		color: var(--link);
 	}
 
 	.lede {
@@ -971,7 +1073,7 @@
 		position: absolute;
 		top: calc(100% + 8px);
 		right: 0;
-		width: 252px;
+		width: min(300px, calc(100vw - 32px));
 		padding: 6px;
 		background: var(--menu);
 		border: 1px solid var(--line);
@@ -1014,6 +1116,12 @@
 	.menu-label {
 		flex: 1;
 		text-align: left;
+	}
+
+	.menu-value {
+		color: var(--ink3);
+		font-size: 13px;
+		flex: none;
 	}
 
 	.menu-rule {

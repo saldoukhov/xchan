@@ -18,6 +18,7 @@
 	import { listChannels, putChannel } from '$lib/db';
 	import Icon from '$lib/Icon.svelte';
 	import IdentityCard from '$lib/IdentityCard.svelte';
+	import { fill, i18n } from '$lib/i18n.svelte';
 	import {
 		FileAssembler,
 		FileUnreadableError,
@@ -69,8 +70,11 @@
 	const assembler = new FileAssembler();
 
 	const slug = $derived(page.params.slug ?? '');
-	const title = $derived(channel ? `XChan · ${channelLabel(channel)}` : 'XChan');
-	const heading = $derived(channel ? channelTitle(channel) : '');
+	const m = $derived(i18n.m);
+	const title = $derived(
+		channel ? `XChan · ${channelLabel(channel, m.common.unnamedEndpoint)}` : 'XChan'
+	);
+	const heading = $derived(channel ? channelTitle(channel, m.common.unnamedEndpoint) : '');
 	const peerName = $derived(channel ? channelPeerName(channel) : '');
 	const draftCount = $derived(draft.length);
 	const canSend = $derived(
@@ -110,7 +114,7 @@
 		stallTimer = setTimeout(() => {
 			assembler.reset();
 			incoming = null;
-			sendNote = 'File transfer timed out.';
+			sendNote = i18n.m.channel.transferTimedOut;
 			stallTimer = null;
 		}, TRANSFER_STALL_MS);
 	}
@@ -122,7 +126,7 @@
 	}
 
 	function formatClock(date: Date) {
-		return date.toLocaleTimeString(undefined, {
+		return date.toLocaleTimeString(i18n.locale, {
 			hour: '2-digit',
 			minute: '2-digit',
 			second: '2-digit',
@@ -145,7 +149,7 @@
 				missing = !found;
 			} catch (err) {
 				if (!cancelled) {
-					loadError = err instanceof Error ? err.message : 'Could not open this channel';
+					loadError = err instanceof Error ? err.message : i18n.m.channel.openFailed;
 				}
 			}
 		})();
@@ -187,7 +191,7 @@
 			try {
 				nameCiphertext = await encryptName(selfName, peer);
 			} catch {
-				if (!cancelled) sendNote = 'Could not open this channel.';
+				if (!cancelled) sendNote = i18n.m.channel.openFailed;
 				return;
 			}
 			if (cancelled) return;
@@ -265,8 +269,8 @@
 						resetIncoming();
 						sendNote =
 							err instanceof PayloadTooLargeError
-								? err.message
-								: 'Received a message that could not be read.';
+								? fill(i18n.m.channel.fileTooLarge, { size: formatBytes(MAX_FILE_BYTES) })
+								: i18n.m.channel.unreadableMessage;
 					}
 				}
 			};
@@ -357,12 +361,14 @@
 			}, 1500);
 		} catch (err) {
 			if (abort.signal.aborted) return;
-			if (err instanceof PayloadTooLargeError || err instanceof FileUnreadableError) {
-				sendNote = err.message;
+			if (err instanceof PayloadTooLargeError) {
+				sendNote = fill(i18n.m.channel.fileTooLarge, { size: formatBytes(MAX_FILE_BYTES) });
+			} else if (err instanceof FileUnreadableError) {
+				sendNote = i18n.m.channel.fileUnreadable;
 			} else if (err instanceof Error && err.message === 'peer is not ready') {
-				sendNote = 'Peer is not ready.';
+				sendNote = i18n.m.channel.peerNotReady;
 			} else {
-				sendNote = 'Send failed.';
+				sendNote = i18n.m.channel.sendFailed;
 			}
 		} finally {
 			if (sendAbort === abort) sendAbort = null;
@@ -380,9 +386,9 @@
 		} catch (err) {
 			attached = null;
 			sendNote =
-				err instanceof PayloadTooLargeError || err instanceof FileUnreadableError
-					? err.message
-					: 'Could not read that file. If it is in iCloud, download it to this device first.';
+				err instanceof PayloadTooLargeError
+					? fill(i18n.m.channel.fileTooLarge, { size: formatBytes(MAX_FILE_BYTES) })
+					: i18n.m.channel.fileUnreadable;
 		} finally {
 			attaching = false;
 		}
@@ -427,7 +433,7 @@
 				copyTimer = null;
 			}, 1500);
 		} catch {
-			sendNote = 'Copy failed.';
+			sendNote = i18n.m.channel.copyFailed;
 		}
 	}
 
@@ -480,29 +486,29 @@
 <main class="channel-screen">
 	{#if loadError}
 		<nav class="top">
-			<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+			<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 				<Icon name="back" size={20} />
 			</a>
 		</nav>
 		<p class="error">{loadError}</p>
 	{:else if missing}
 		<nav class="top">
-			<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+			<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 				<Icon name="back" size={20} />
 			</a>
 		</nav>
-		<p class="muted">This channel is not on this device.</p>
+		<p class="muted">{m.channel.missing}</p>
 	{:else if !channel}
 		<nav class="top">
-			<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+			<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 				<Icon name="back" size={20} />
 			</a>
 		</nav>
-		<p class="muted">Opening channel…</p>
+		<p class="muted">{m.channel.opening}</p>
 	{:else}
 		<nav class="top">
 			<div class="who">
-				<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+				<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 					<Icon name="back" size={20} />
 				</a>
 				<img class="peer-hash" src={channel.peerLifeHash} width="40" height="40" alt="" />
@@ -522,7 +528,7 @@
 			</div>
 			<div class="status {peerReady ? 'is-ready' : 'is-waiting'}">
 				<span class="dot"></span>
-				{peerReady ? 'Ready' : 'Waiting'}
+				{peerReady ? m.channel.ready : m.channel.waiting}
 			</div>
 		</nav>
 
@@ -530,14 +536,14 @@
 			{#if compareOpen}
 				<div class="full-cards">
 					<IdentityCard
-						title="Us"
-						names={[endpoint?.name || 'Unnamed']}
+						title={m.common.us}
+						names={[endpoint?.name || m.common.unnamed]}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
 					<IdentityCard
-						title="Them"
-						names={themCardNames(channel)}
+						title={m.common.them}
+						names={themCardNames(channel, m.common.unnamed)}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>
@@ -546,8 +552,8 @@
 				<div class="summaries">
 					<IdentityCard
 						variant="row"
-						title="Us"
-						names={[endpoint?.name || 'Unnamed']}
+						title={m.common.us}
+						names={[endpoint?.name || m.common.unnamed]}
 						lifeHash={channel.localLifeHash}
 						words={channel.localWords}
 					/>
@@ -555,8 +561,8 @@
 					<div class="hsplit"></div>
 					<IdentityCard
 						variant="row"
-						title="Them"
-						names={themCardNames(channel)}
+						title={m.common.them}
+						names={themCardNames(channel, m.common.unnamed)}
 						lifeHash={channel.peerLifeHash}
 						words={channel.peerWords}
 					/>
@@ -564,15 +570,12 @@
 			{/if}
 			<div class="compare-foot">
 				<p class="hint">
-					<span class="hint-long"
-						>Check both cards against the other device before you send. Copy the picture and words
-						if you cannot see the other screen.</span
-					>
-					<span class="hint-short">Check or copy both cards.</span>
+					<span class="hint-long">{m.channel.hintLong}</span>
+					<span class="hint-short">{m.channel.hintShort}</span>
 				</p>
 				<button type="button" class="compare-btn" onclick={() => (compareOpen = !compareOpen)}>
-					<span class="compare-long">Compare All 24 Words</span>
-					<span class="compare-short">24 Words</span>
+					<span class="compare-long">{m.channel.compareLong}</span>
+					<span class="compare-short">{m.channel.compareShort}</span>
 					<Icon name={compareOpen ? 'unfold-less' : 'unfold-more'} size={18} />
 				</button>
 			</div>
@@ -583,19 +586,19 @@
 				class="pane"
 				class:is-drop={draggingFile}
 				role="group"
-				aria-label="Send"
+				aria-label={m.channel.send}
 				ondragover={onSendDragOver}
 				ondragenter={onSendDragOver}
 				ondragleave={onSendDragLeave}
 				ondrop={onSendDrop}
 			>
-				<span class="kicker">Send</span>
+				<span class="kicker">{m.channel.send}</span>
 				<input bind:this={fileInput} class="sr-only" type="file" onchange={onFileInput} />
 				{#if attaching}
 					<div class="file-chip">
 						<Icon name="file" size={18} />
 						<div class="file-meta">
-							<span class="file-name">Reading file…</span>
+							<span class="file-name">{m.channel.readingFile}</span>
 						</div>
 					</div>
 				{:else if attached}
@@ -616,7 +619,7 @@
 						<button
 							type="button"
 							class="icon"
-							aria-label="Remove file"
+							aria-label={m.channel.removeFile}
 							disabled={sending}
 							onclick={() => (attached = null)}
 						>
@@ -638,7 +641,7 @@
 					<textarea
 						spellcheck="false"
 						autocomplete="off"
-						placeholder="Type or paste a short secret, or attach a file"
+						placeholder={m.channel.placeholder}
 						maxlength={MAX_MESSAGE_CHARS}
 						value={draft}
 						oninput={onDraftInput}
@@ -661,7 +664,7 @@
 						<button
 							type="button"
 							class="icon outlined"
-							aria-label="Attach a file"
+							aria-label={m.channel.attachFile}
 							disabled={sending || attaching}
 							onclick={() => fileInput?.click()}
 						>
@@ -674,7 +677,7 @@
 							onclick={sendMessage}
 						>
 							<Icon name={sent ? 'check' : 'send'} size={18} />
-							{sent ? 'Sent' : 'Send'}
+							{sent ? m.channel.sent : m.channel.send}
 						</button>
 					</div>
 				</div>
@@ -682,14 +685,14 @@
 					<p class="error send-error">{sendNote}</p>
 				{:else if !peerReady}
 					<p class="hint wait-note">
-						Both devices must be on this channel. Waiting for {heading}.
+						{fill(m.channel.waitNote, { name: heading })}
 					</p>
 				{/if}
 			</section>
 
 			<section class="pane">
 				<div class="pane-head">
-					<span class="kicker">Received</span>
+					<span class="kicker">{m.channel.received}</span>
 					{#if receivedClock}
 						<span class="count">{receivedClock}</span>
 					{/if}
@@ -740,11 +743,11 @@
 					{/if}
 				</div>
 				<div class="pane-foot">
-					<span class="hint">Cleared when you leave.</span>
+					<span class="hint">{m.channel.cleared}</span>
 					{#if receivedFile}
 						{#if canRevealFolder}
 							<button type="button" class="compare-btn" onclick={showInFolder}>
-								Show in folder
+								{m.channel.showInFolder}
 							</button>
 						{/if}
 					{:else if !incoming}
@@ -753,10 +756,10 @@
 							class="ghost"
 							onclick={copyReceived}
 							disabled={!receivedText}
-							aria-label={copied ? 'Copied' : 'Copy received message'}
+							aria-label={copied ? m.common.copied : m.channel.copyReceived}
 						>
 							<Icon name={copied ? 'check' : 'copy'} size={18} />
-							{copied ? 'Copied' : 'Copy'}
+							{copied ? m.common.copied : m.common.copy}
 						</button>
 					{/if}
 				</div>

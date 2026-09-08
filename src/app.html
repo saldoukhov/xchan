@@ -32,6 +32,10 @@
 					document.documentElement.style.colorScheme = t;
 					var meta = document.querySelector('meta[name="theme-color"]');
 					if (meta) meta.setAttribute('content', t === 'light' ? '#F8F8F8' : '#000000');
+					var loc = localStorage.getItem('xchan-locale');
+					if (loc === 'en' || loc === 'es' || loc === 'ru' || loc === 'fr' || loc === 'de') {
+						document.documentElement.lang = loc;
+					}
 				} catch (e) {
 					document.documentElement.dataset.theme = 'dark';
 				}

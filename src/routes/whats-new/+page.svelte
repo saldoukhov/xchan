@@ -2,7 +2,11 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import Icon from '$lib/Icon.svelte';
+	import RichText from '$lib/RichText.svelte';
+	import { fill, formatReleaseDate, i18n } from '$lib/i18n.svelte';
 	import { APP_VERSION, RELEASES, parseWhatsNew, type Release } from '$lib/releases';
+
+	const m = $derived(i18n.m);
 
 	let releases = $state<Release[]>(RELEASES);
 	let hostVersion = $state(APP_VERSION);
@@ -26,27 +30,23 @@
 </script>
 
 <svelte:head>
-	<title>What’s new · XChan</title>
-	<meta
-		name="description"
-		content="XChan release notes for this device and newer versions on the host."
-	/>
+	<title>{m.meta.whatsNewTitle}</title>
+	<meta name="description" content={m.meta.whatsNewDescription} />
 </svelte:head>
 
 <main>
 	<header class="top">
-		<a class="icon outlined" href={resolve('/')} aria-label="Back to home">
+		<a class="icon outlined" href={resolve('/')} aria-label={m.common.backHome}>
 			<Icon name="back" size={20} />
 		</a>
 		<div class="intro">
-			<h1>What’s new</h1>
+			<h1>{m.whatsNew.title}</h1>
 			<p class="lede">
-				This device is running <strong>{APP_VERSION}</strong>. Notes below load from this host, so a
-				pinned app can read a newer release before you update.
+				<RichText text={fill(m.whatsNew.lede, { version: APP_VERSION })} />
 			</p>
 			{#if hostVersion !== APP_VERSION}
 				<p class="lede">
-					<strong>{hostVersion}</strong> is on the server.
+					<RichText text={fill(m.whatsNew.hostVersion, { version: hostVersion })} />
 				</p>
 			{/if}
 		</div>
@@ -57,12 +57,12 @@
 			<div class="release-head">
 				<h2>{release.version}</h2>
 				{#if release.version === APP_VERSION}
-					<span class="badge">On this device</span>
+					<span class="badge">{m.whatsNew.onThisDevice}</span>
 				{:else if release.version === hostVersion}
-					<span class="badge incoming">On the server</span>
+					<span class="badge incoming">{m.whatsNew.onTheServer}</span>
 				{/if}
 			</div>
-			<p class="date">{release.date}</p>
+			<p class="date">{formatReleaseDate(release.date, i18n.locale)}</p>
 			<ul>
 				{#each release.notes as note, i (`${release.version}-${i}`)}
 					<li>{note}</li>
@@ -72,9 +72,9 @@
 	{/each}
 
 	<p class="foot">
-		<a href={resolve('/')}>Back to pairing</a>
+		<a href={resolve('/')}>{m.common.backToPairing}</a>
 		<span aria-hidden="true"> · </span>
-		<a href={resolve('/how')}>How it works</a>
+		<a href={resolve('/how')}>{m.common.howItWorks}</a>
 	</p>
 </main>
 
@@ -98,7 +98,7 @@
 		margin-top: 10px;
 	}
 
-	.lede strong {
+	.lede :global(strong) {
 		color: var(--ink);
 		font-weight: 600;
 	}

@@ -10,9 +10,19 @@ export type WhatsNew = {
 };
 
 /** Keep equal to package.json version. Newest release first. */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.1';
 
 export const RELEASES: Release[] = [
+	{
+		version: '1.1.1',
+		date: '2026-09-08',
+		notes: ['The home screen shows this device’s version next to the title.']
+	},
+	{
+		version: '1.1.0',
+		date: '2026-09-08',
+		notes: ['Choose a language from the menu: English, Spanish, Russian, French, or German.']
+	},
 	{
 		version: '1.0.0',
 		date: '2026-09-08',

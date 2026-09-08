@@ -1,18 +1,18 @@
 import type { Channel } from './types';
 
-export function channelLabel(channel: Channel): string {
+export function channelLabel(channel: Channel, unnamed = 'Unnamed endpoint'): string {
 	if (channel.localAlias && channel.peerName) {
 		return `${channel.localAlias} (${channel.peerName})`;
 	}
-	return channel.localAlias || channel.peerName || 'Unnamed endpoint';
+	return channel.localAlias || channel.peerName || unnamed;
 }
 
-export function channelTitle(channel: Channel): string {
+export function channelTitle(channel: Channel, unnamed = 'Unnamed endpoint'): string {
 	const alias = channel.localAlias.trim();
 	if (alias) return alias;
 	const peer = channel.peerName.trim();
 	if (peer) return peer;
-	return 'Unnamed endpoint';
+	return unnamed;
 }
 
 export function channelPeerName(channel: Channel): string {
@@ -69,11 +69,11 @@ export function findChannelByPeerIdentity(
 	return channels.find((channel) => channel.peerIdentityPublicKey === peerIdentityPublicKey);
 }
 
-export function themCardNames(channel: Channel): string[] {
+export function themCardNames(channel: Channel, unnamed = 'Unnamed'): string[] {
 	const peer = channel.peerName.trim();
 	const alias = channel.localAlias.trim();
 	if (alias && peer && alias !== peer) return [alias, peer];
 	if (alias) return [alias];
 	if (peer) return [peer];
-	return ['Unnamed'];
+	return [unnamed];
 }
