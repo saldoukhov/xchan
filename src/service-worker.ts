@@ -5,7 +5,13 @@
 
 import { build, files, version } from '$service-worker';
 import { loadAutoUpdate } from '$lib/db';
-import { isRelayPath, parseSwMessage, shouldServeCacheFirst, SW_MESSAGE } from '$lib/update';
+import {
+	isLiveNotesPath,
+	isRelayPath,
+	parseSwMessage,
+	shouldServeCacheFirst,
+	SW_MESSAGE
+} from '$lib/update';
 
 const self = globalThis.self as unknown as ServiceWorkerGlobalScope;
 
@@ -62,7 +68,7 @@ self.addEventListener('fetch', (event) => {
 
 	const url = new URL(event.request.url);
 	if (url.origin !== self.location.origin) return;
-	if (isRelayPath(url.pathname)) return;
+	if (isRelayPath(url.pathname) || isLiveNotesPath(url.pathname)) return;
 
 	async function respond() {
 		await prefReady;

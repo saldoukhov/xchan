@@ -24,7 +24,8 @@ describe('how it works page', () => {
 		expect(page).toContain('IP addresses');
 		expect(page).toContain('turn off automatic updates in the menu');
 		expect(page).toContain('A banner on the');
-		expect(page).toContain('home screen tells you when a new version is waiting.');
+		expect(page).toContain('home screen tells you when a new version is waiting, with a link to');
+		expect(page).toContain('What’s new');
 	});
 
 	it('covers public source, audit, and agent review', () => {

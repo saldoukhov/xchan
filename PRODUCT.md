@@ -53,7 +53,8 @@ What ships in the first runnable version (bullet list):
 - Information sent to another party (messages, files, and endpoint names) is encrypted with the other party public key using ecies encyption schema. For the reference, see Keeper Secrets Manager JS SDK.
 - Server does not store any information, it is just a relay between parties.
 - App has a How it works page in plain language: pairing steps, why to compare LifeHash and the 24-word grid, what the relay can and cannot see, and that the public source has been audited and can be audited again with an agent.
-- After installing the PWA, the user can turn off automatic updates. A new client then waits for a manual Update instead of replacing the running app on its own. The home screen shows a banner when an update is available. Default remains automatic.
+- After installing the PWA, the user can turn off automatic updates. A new client then waits for a manual Update instead of replacing the running app on its own. The home screen shows a banner when an update is available, with a link to What’s new. Default remains automatic.
+- App maintains a version and a What’s new list of releases (`src/lib/releases.ts`). The What’s new page can load notes from this host so a pinned client can read a newer release before updating.
 
 ## Non-goals
 

@@ -574,6 +574,9 @@
 				<p>
 					A new version is on the server. This device will keep the current app until you update.
 				</p>
+				<p class="update-link">
+					<a href={resolve('/whats-new')}>What’s new</a>
+				</p>
 			</div>
 			<div class="row">
 				<button type="button" class="ghost" onclick={dismissUpdate}>Later</button>
@@ -850,6 +853,8 @@
 	<p class="foot">
 		<a href={resolve('/how')}>How it works</a>
 		<span aria-hidden="true"> · </span>
+		<a href={resolve('/whats-new')}>What’s new</a>
+		<span aria-hidden="true"> · </span>
 		Channel keys live on this device only. Clearing site data destroys them.
 	</p>
 </main>
@@ -902,6 +907,10 @@
 		color: var(--ink2);
 		font-size: 15px;
 		line-height: 22px;
+	}
+
+	.update-link {
+		margin-top: 2px;
 	}
 
 	.update-banner .row {

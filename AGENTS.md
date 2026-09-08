@@ -26,3 +26,12 @@ Product decisions live in `PRODUCT.md`. Treat that file as source of truth.
 - Never commit secrets or put API keys in client code
 - Do not log public keys, ciphertext, or message bodies
 - Do not persist messages, files, or pairings on the server
+
+## Releases
+
+When shipping a user-visible change:
+
+- Bump `package.json` (and `package-lock.json`) version
+- Set `APP_VERSION` in `src/lib/releases.ts` to the same value
+- Add a new object at the **top** of `RELEASES` (newest first) with `version`, `date` (YYYY-MM-DD), and `notes`
+- Notes appear on `/whats-new` and `/whats-new.json`. Pinned clients fetch the JSON from the host.

@@ -17,6 +17,10 @@ export function isRelayPath(pathname: string): boolean {
 	return pathname === '/api' || pathname.startsWith('/api/');
 }
 
+export function isLiveNotesPath(pathname: string): boolean {
+	return pathname === '/whats-new.json';
+}
+
 export function shouldServeCacheFirst(opts: { autoUpdate: boolean; isAsset: boolean }): boolean {
 	return opts.isAsset || !opts.autoUpdate;
 }

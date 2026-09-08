@@ -110,8 +110,8 @@
 					</li>
 					<li>
 						If you install the app, you can turn off automatic updates in the menu. A banner on the
-						home screen tells you when a new version is waiting. This device keeps the current
-						client until you tap Update.
+						home screen tells you when a new version is waiting, with a link to What’s new. This
+						device keeps the current client until you tap Update.
 					</li>
 				</ul>
 			</div>
@@ -174,6 +174,8 @@
 
 	<p class="foot">
 		<a href={resolve('/')}>Back to pairing</a>
+		<span aria-hidden="true"> · </span>
+		<a href={resolve('/whats-new')}>What’s new</a>
 	</p>
 </main>
 

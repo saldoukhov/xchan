@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	SW_MESSAGE,
 	autoUpdateFromStored,
+	isLiveNotesPath,
 	isRelayPath,
 	parseSwMessage,
 	shouldApplyWaitingWorker,
@@ -28,6 +29,15 @@ describe('isRelayPath', () => {
 		expect(isRelayPath('/')).toBe(false);
 		expect(isRelayPath('/how')).toBe(false);
 		expect(isRelayPath('/service-worker.js')).toBe(false);
+		expect(isRelayPath('/whats-new.json')).toBe(false);
+	});
+});
+
+describe('isLiveNotesPath', () => {
+	it('lets pinned clients fetch current release notes from the host', () => {
+		expect(isLiveNotesPath('/whats-new.json')).toBe(true);
+		expect(isLiveNotesPath('/whats-new')).toBe(false);
+		expect(isLiveNotesPath('/')).toBe(false);
 	});
 });
 

@@ -19,5 +19,7 @@ describe('home menu', () => {
 		expect(page).toContain('applyWaitingUpdate');
 		expect(page).toContain('Later');
 		expect(page).toContain('Update');
+		expect(page).toContain("resolve('/whats-new')");
+		expect(page).toContain('What’s new');
 	});
 });

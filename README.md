@@ -20,6 +20,8 @@ If the other device is far away, copy the picture and the 24 words from a card a
 
 The in-app **How it works** page (`/how`) is the same story for people who do not read GitHub: what to compare, what the relay can see, and a prompt you can paste into an agent to audit the source.
 
+**What’s new** (`/whats-new`) is the release list for this app. Add a version at the top of `src/lib/releases.ts` when you ship (keep it equal to `package.json`). The update banner links there so a pinned device can read notes before it updates.
+
 The hosted instance at [xchan.dev](https://xchan.dev) uses one FIFO pairing queue for everyone on that host. **Self-host this** if you want a private queue.
 
 Clearing site data destroys pairing keys and all channels. Horizontal scale needs a shared bus; v1 is one Node process.
