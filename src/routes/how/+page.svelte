@@ -109,8 +109,9 @@
 						keep their own.
 					</li>
 					<li>
-						If you install the app, you can turn off automatic updates in the menu. This device then
-						keeps the current client until you tap Update.
+						If you install the app, you can turn off automatic updates in the menu. A banner on the
+						home screen tells you when a new version is waiting. This device keeps the current
+						client until you tap Update.
 					</li>
 				</ul>
 			</div>

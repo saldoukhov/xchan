@@ -11,4 +11,13 @@ describe('home menu', () => {
 		expect(page).toContain('checkForUpdate');
 		expect(page).toContain('this device keeps the current app until you choose to update');
 	});
+
+	it('shows a home-screen banner when a new version is waiting', () => {
+		expect(page).toContain('updateState.updateAvailable');
+		expect(page).toContain('New version');
+		expect(page).toContain('This device will keep the current app until you update.');
+		expect(page).toContain('applyWaitingUpdate');
+		expect(page).toContain('Later');
+		expect(page).toContain('Update');
+	});
 });

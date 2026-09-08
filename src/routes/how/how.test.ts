@@ -23,6 +23,8 @@ describe('how it works page', () => {
 		expect(page).toContain('It cannot read names, message text, or file contents.');
 		expect(page).toContain('IP addresses');
 		expect(page).toContain('turn off automatic updates in the menu');
+		expect(page).toContain('A banner on the');
+		expect(page).toContain('home screen tells you when a new version is waiting.');
 	});
 
 	it('covers public source, audit, and agent review', () => {

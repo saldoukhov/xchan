@@ -5,7 +5,6 @@ import {
 	isRelayPath,
 	parseSwMessage,
 	shouldApplyWaitingWorker,
-	shouldCheckForServiceWorkerUpdate,
 	shouldServeCacheFirst
 } from './update';
 
@@ -45,11 +44,6 @@ describe('shouldServeCacheFirst', () => {
 });
 
 describe('update gating', () => {
-	it('does not probe the host when automatic updates are off', () => {
-		expect(shouldCheckForServiceWorkerUpdate(true)).toBe(true);
-		expect(shouldCheckForServiceWorkerUpdate(false)).toBe(false);
-	});
-
 	it('activates the first install even when automatic updates are off', () => {
 		expect(shouldApplyWaitingWorker({ autoUpdate: false, hasController: false })).toBe(true);
 		expect(shouldApplyWaitingWorker({ autoUpdate: true, hasController: false })).toBe(true);

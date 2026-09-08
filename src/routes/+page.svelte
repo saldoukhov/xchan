@@ -19,7 +19,13 @@
 	import { sanitizeName } from '$lib/name';
 	import { PAIRING_SECONDS } from '$lib/pairing';
 	import { themeState, toggleTheme } from '$lib/theme.svelte';
-	import { checkForUpdate, toggleAutoUpdate, updateState } from '$lib/update.svelte';
+	import {
+		applyWaitingUpdate,
+		checkForUpdate,
+		dismissUpdate,
+		toggleAutoUpdate,
+		updateState
+	} from '$lib/update.svelte';
 	import type { Channel, Endpoint, PairEvent } from '$lib/types';
 
 	let endpoint = $state<Endpoint | null>(null);
@@ -561,6 +567,21 @@
 		</p>
 	</header>
 
+	{#if updateState.updateAvailable}
+		<section class="update-banner" role="status">
+			<div class="update-copy">
+				<h2>New version</h2>
+				<p>
+					A new version is on the server. This device will keep the current app until you update.
+				</p>
+			</div>
+			<div class="row">
+				<button type="button" class="ghost" onclick={dismissUpdate}>Later</button>
+				<button type="button" onclick={applyWaitingUpdate}>Update</button>
+			</div>
+		</section>
+	{/if}
+
 	{#if loadError}
 		<p class="error">{loadError}</p>
 	{:else if !endpoint}
@@ -858,6 +879,39 @@
 
 	.lede {
 		grid-column: 1 / -1;
+	}
+
+	.update-banner {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.update-copy {
+		flex: 1 1 16rem;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.update-copy p {
+		margin: 0;
+		color: var(--ink2);
+		font-size: 15px;
+		line-height: 22px;
+	}
+
+	.update-banner .row {
+		flex: none;
+	}
+
+	.update-banner button {
+		height: 36px;
+		padding: 0 16px;
+		font-size: 14px;
 	}
 
 	.top-actions {

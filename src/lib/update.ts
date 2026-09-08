@@ -21,10 +21,6 @@ export function shouldServeCacheFirst(opts: { autoUpdate: boolean; isAsset: bool
 	return opts.isAsset || !opts.autoUpdate;
 }
 
-export function shouldCheckForServiceWorkerUpdate(autoUpdate: boolean): boolean {
-	return autoUpdate;
-}
-
 export function shouldApplyWaitingWorker(opts: {
 	autoUpdate: boolean;
 	hasController: boolean;

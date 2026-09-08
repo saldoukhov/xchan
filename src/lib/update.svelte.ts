@@ -1,12 +1,7 @@
 import { base } from '$app/paths';
 import { dev } from '$app/environment';
 import { loadAutoUpdate, saveAutoUpdate } from './db';
-import {
-	SW_MESSAGE,
-	shouldApplyWaitingWorker,
-	shouldCheckForServiceWorkerUpdate,
-	type SwMessage
-} from './update';
+import { SW_MESSAGE, shouldApplyWaitingWorker, type SwMessage } from './update';
 
 export const updateState = $state({
 	autoUpdate: true,
@@ -86,9 +81,7 @@ export async function initUpdates() {
 			return;
 		}
 		bindRegistration(existing);
-		if (shouldCheckForServiceWorkerUpdate(updateState.autoUpdate)) {
-			await existing.update();
-		}
+		await existing.update();
 	} catch {
 		// Private mode or a blocked worker should not break pairing.
 	}

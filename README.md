@@ -68,4 +68,4 @@ Then generate a public domain in the service settings.
 - The relay can see ciphertext, pairing commits, public keys after reveal, and IPs — not names, message plaintext, or file contents.
 - Compare LifeHash and the 24-word grid across both devices before sending. The three-word list label is not the security check.
 - Anyone who can reach your instance can enter the pairing queue, subject to in-memory IP throttles (joins and successful matches), two concurrent waiters per IP, and a global queue cap. Limits reset when the process restarts.
-- Automatic updates are on by default. Turn them off in the menu after installing the PWA if you want this device to keep its current client until you choose to update.
+- Automatic updates are on by default. Turn them off in the menu after installing the PWA if you want this device to keep its current client until you choose to update. The home screen shows a banner when a new version is waiting.
