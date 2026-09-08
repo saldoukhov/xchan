@@ -454,6 +454,11 @@
 	<header class="top">
 		<h1><span class="mark">X</span>Chan</h1>
 		<div class="top-actions">
+			<a class="how-link" href={resolve('/how')} aria-label="How it works">
+				<Icon name="help" size={18} />
+				<span class="how-text">How it works</span>
+			</a>
+			<div class="vdiv" aria-hidden="true"></div>
 			<nav class="outlinks" aria-label="XChan elsewhere">
 				<a
 					class="icon"
@@ -780,7 +785,11 @@
 		{/if}
 	{/if}
 
-	<p class="foot">Channel keys live on this device only. Clearing site data destroys them.</p>
+	<p class="foot">
+		<a href={resolve('/how')}>How it works</a>
+		<span aria-hidden="true"> · </span>
+		Channel keys live on this device only. Clearing site data destroys them.
+	</p>
 </main>
 
 <dialog bind:this={resetDialog} aria-labelledby="reset-title" onclick={onResetDialogClick}>
@@ -815,6 +824,25 @@
 		align-items: center;
 		gap: 4px;
 		flex: none;
+	}
+
+	.how-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 40px;
+		padding: 0 12px 0 10px;
+		border-radius: var(--radius-pill);
+		color: var(--ink2);
+		text-decoration: none;
+		font-size: 14px;
+		font-weight: 500;
+		flex-shrink: 0;
+	}
+
+	.how-link:hover {
+		background: var(--hover);
+		color: var(--ink);
 	}
 
 	.outlinks {
@@ -1252,6 +1280,16 @@
 
 		.vdiv {
 			display: none;
+		}
+
+		.how-text {
+			display: none;
+		}
+
+		.how-link {
+			width: 40px;
+			padding: 0;
+			justify-content: center;
 		}
 
 		.endpoint-grid {

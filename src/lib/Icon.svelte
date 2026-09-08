@@ -9,6 +9,7 @@
 		| 'download'
 		| 'file'
 		| 'github'
+		| 'help'
 		| 'moon'
 		| 'more'
 		| 'pencil'
@@ -71,6 +72,10 @@
 	{:else if name === 'send'}
 		<path d="M7 17 17 7" />
 		<path d="M8 7h9v9" />
+	{:else if name === 'help'}
+		<circle cx="12" cy="12" r="9" />
+		<path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+		<path d="M12 17h.01" />
 	{:else if name === 'github'}
 		<path
 			fill="currentColor"

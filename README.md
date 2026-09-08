@@ -18,6 +18,8 @@ Each pairing mints a non-exportable P-256 key pair. Clients commit to `SHA-256(p
 
 If the cards do not match, delete the channel and pair again.
 
+The in-app **How it works** page (`/how`) is the same story for people who do not read GitHub: what to compare, what the relay can see, and a prompt you can paste into an agent to audit the source.
+
 The hosted instance at [xchan.dev](https://xchan.dev) uses one FIFO pairing queue for everyone on that host. **Self-host this** if you want a private queue.
 
 Clearing site data destroys pairing keys and all channels. Horizontal scale needs a shared bus; v1 is one Node process.
