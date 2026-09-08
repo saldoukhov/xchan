@@ -1,4 +1,5 @@
 import type { Channel } from './types';
+import { AUTO_UPDATE_KEY, autoUpdateFromStored } from './update';
 
 const DB_NAME = 'xchan';
 const DB_VERSION = 3;
@@ -61,6 +62,29 @@ export async function saveEndpointRecord(record: EndpointRecord): Promise<void> 
 	try {
 		await idbRequest(
 			db.transaction('meta', 'readwrite').objectStore('meta').put(record, 'endpoint')
+		);
+	} finally {
+		db.close();
+	}
+}
+
+export async function loadAutoUpdate(): Promise<boolean> {
+	const db = await openDb();
+	try {
+		const value = await idbRequest(
+			db.transaction('meta').objectStore('meta').get(AUTO_UPDATE_KEY) as IDBRequest<unknown>
+		);
+		return autoUpdateFromStored(value);
+	} finally {
+		db.close();
+	}
+}
+
+export async function saveAutoUpdate(enabled: boolean): Promise<void> {
+	const db = await openDb();
+	try {
+		await idbRequest(
+			db.transaction('meta', 'readwrite').objectStore('meta').put(enabled, AUTO_UPDATE_KEY)
 		);
 	} finally {
 		db.close();

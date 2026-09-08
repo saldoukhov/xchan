@@ -19,6 +19,7 @@
 	import { sanitizeName } from '$lib/name';
 	import { PAIRING_SECONDS } from '$lib/pairing';
 	import { themeState, toggleTheme } from '$lib/theme.svelte';
+	import { checkForUpdate, toggleAutoUpdate, updateState } from '$lib/update.svelte';
 	import type { Channel, Endpoint, PairEvent } from '$lib/types';
 
 	let endpoint = $state<Endpoint | null>(null);
@@ -506,6 +507,46 @@
 								><span class="knob"></span></span
 							>
 						</button>
+						{#if updateState.supported}
+							<button
+								type="button"
+								class="menu-item"
+								role="menuitemcheckbox"
+								aria-checked={updateState.autoUpdate}
+								title="When off, this device keeps the current app until you choose to update"
+								onclick={() => void toggleAutoUpdate()}
+							>
+								<Icon name="cloud" size={18} />
+								<span class="menu-label">Automatically update</span>
+								<span class="switch" class:on={updateState.autoUpdate}
+									><span class="knob"></span></span
+								>
+							</button>
+							{#if !updateState.autoUpdate}
+								<button
+									type="button"
+									class="menu-item"
+									role="menuitem"
+									disabled={updateState.checking}
+									onclick={() => {
+										void checkForUpdate().then(() => {
+											if (updateState.updateAvailable) closeMenu();
+										});
+									}}
+								>
+									<Icon name="download" size={18} />
+									<span class="menu-label">
+										{#if updateState.checking}
+											Checking…
+										{:else if updateState.checkResult === 'current'}
+											No update
+										{:else}
+											Check for update
+										{/if}
+									</span>
+								</button>
+							{/if}
+						{/if}
 						<div class="menu-rule"></div>
 						<button type="button" class="menu-item danger" role="menuitem" onclick={openReset}>
 							<Icon name="restart" size={18} />
@@ -866,7 +907,7 @@
 		position: absolute;
 		top: calc(100% + 8px);
 		right: 0;
-		width: 216px;
+		width: 252px;
 		padding: 6px;
 		background: var(--menu);
 		border: 1px solid var(--line);

@@ -22,6 +22,7 @@ describe('how it works page', () => {
 	it('says what the relay can and cannot see', () => {
 		expect(page).toContain('It cannot read names, message text, or file contents.');
 		expect(page).toContain('IP addresses');
+		expect(page).toContain('turn off automatic updates in the menu');
 	});
 
 	it('covers public source, audit, and agent review', () => {
@@ -32,5 +33,8 @@ describe('how it works page', () => {
 		expect(page).toContain('Paste this into any coding agent:');
 		expect(page).toContain('The site does not do this check for you.');
 		expect(page).toContain('less incentive to hack it');
+		expect(page).toContain('You can pin the client on this device.');
+		expect(page).toContain('turn off automatic updates');
+		expect(page).toContain('quietly replace the copy you already have');
 	});
 });

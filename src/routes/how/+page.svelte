@@ -108,6 +108,10 @@
 						Clearing site data, resetting, or switching browsers destroys the keys. Other devices
 						keep their own.
 					</li>
+					<li>
+						If you install the app, you can turn off automatic updates in the menu. This device then
+						keeps the current client until you tap Update.
+					</li>
 				</ul>
 			</div>
 			<div>
@@ -145,6 +149,11 @@
 				<strong>The project is small on purpose.</strong>
 				There are no accounts, no database, and no ads. With no user data sitting on a server, there is
 				less incentive to hack it.
+			</li>
+			<li>
+				<strong>You can pin the client on this device.</strong>
+				Automatic updates are on by default. Turn them off after you install the app if you do not want
+				a compromised host to quietly replace the copy you already have.
 			</li>
 		</ul>
 		<p>Paste this into any coding agent:</p>

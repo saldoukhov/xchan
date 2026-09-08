@@ -15,3 +15,5 @@ In scope: the relay, pairing protocol, client crypto, and the hosted instance at
 Out of scope: denial of service against the in-memory pairing queue, and issues that require the victim to skip the LifeHash / 24-word comparison.
 
 The server is a relay. It sees pairing commits, public keys after reveal, ciphertext, and IPs. It does not store keys, channels, or message bodies.
+
+Installed copies can turn off automatic updates so a new client waits for a manual Update. This reduces silent replacement if the host is compromised; it is not a guarantee against a service worker that forces itself active.
